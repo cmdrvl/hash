@@ -71,36 +71,37 @@ hash witness <query|last|count> [OPTIONS]
 
 - `[INPUT]`: JSONL manifest file (default: stdin). When omitted, reads from stdin (for pipe composition).
 
-### Flags (v0.1 — core)
+### Flags
 
 - `--algorithm <ALG>`: Hash algorithm. Accepted values: `sha256` (default), `blake3`. Case-insensitive.
 - `--jobs <N>`: Number of parallel hashing workers (default: number of available CPUs). `--jobs 1` for sequential processing.
 - `--no-witness`: Suppress witness ledger recording for this run.
-- `--describe`: Print the compiled-in `operator.json` to stdout and exit 0.
-- `--schema`: Print the JSON Schema for the JSONL record to stdout and exit 0.
+- `--describe`: Print the compiled-in `operator.json` to stdout and exit 0. Checked before input is validated, so `hash --describe` works with no arguments.
+- `--schema`: Print the JSON Schema for the JSONL record to stdout and exit 0. Like `--describe`, checked before input is validated.
 - `--progress`: Emit structured progress JSONL to stderr (see Progress reporting).
 - `--version`: Print `hash <semver>` to stdout and exit 0.
 
 ### Exit codes
 
-- `0`: All records hashed successfully.
-- `1`: Partial success — one or more records marked `_skipped: true` with warnings recorded in-stream. The remaining records were hashed successfully.
-- `2`: Refusal / CLI error.
+- `0`: ALL_HASHED — every input record was hashed successfully.
+- `1`: PARTIAL — one or more records marked `_skipped: true` with warnings recorded in-stream. The remaining records were hashed successfully.
+- `2`: REFUSAL / CLI error — hash could not process the input.
 
 ### Streams
 
-- Enriched JSONL records to stdout (always structured).
-- Progress (when `--progress`): structured JSONL to stderr.
-- Warnings (without `--progress`): unstructured one-per-line to stderr.
+- **stdout (exit 0 or 1):** Enriched JSONL records (always structured; one record per input record).
+- **stdout (exit 2):** Single refusal JSON envelope (see Refusal Codes).
+- **stderr:** Progress JSONL when `--progress`; unstructured one-per-line warnings otherwise.
 
 ### Witness ledger (epistemic spine parity)
 
 Same protocol as `vacuum`, `rvl`, and `shape`:
 
-- Default: append one `witness.v0` record per run.
+- Default: every hash run (success or refusal) appends exactly one `witness.v0` record.
+- `outcome` in the witness record: `"ALL_HASHED"` (exit 0), `"PARTIAL"` (exit 1), or `"REFUSAL"` (exit 2).
 - Opt-out: `--no-witness`.
 - Path: `EPISTEMIC_WITNESS` env var → `~/.epistemic/witness.jsonl`.
-- Failures never change exit code.
+- Witness failures never change the domain exit code.
 
 Witness query subcommands (same shape as rvl/shape/vacuum):
 
@@ -160,8 +161,10 @@ Each record passes through all upstream fields and adds hash fields:
 | `bytes_hash` | string | yes | `"<algorithm>:<hex>"`; `null` only when `_skipped: true` |
 | `hash_algorithm` | string | yes | `"sha256"` or `"blake3"`; `null` only when `_skipped: true` |
 | `tool_versions` | object | no | Merged: upstream versions + `{ "hash": "<semver>" }` |
-| `_skipped` | bool | yes | Present and `true` when this record could not be hashed |
-| `_warnings` | array | yes | Array of warning objects; may be empty or inherited from upstream |
+| `_skipped` | bool | yes | `true` when this record could not be hashed; absent on normal records |
+| `_warnings` | object[] | yes | Array of warning objects; absent on normal records. May be inherited from upstream or appended by hash. |
+
+`_skipped` and `_warnings` are omitted from normal records (not serialized when absent). They only appear on records where the file could not be hashed. See **Passthrough of upstream `_skipped` records** and **New `_skipped` records from hash**.
 
 All upstream fields (`path`, `relative_path`, `root`, `size`, `mtime`, `extension`, `mime_guess`) pass through unchanged. Only `version` and `tool_versions` are updated.
 
@@ -174,10 +177,10 @@ The `bytes_hash` value uses the format `<algorithm>:<lowercase-hex>`:
 
 ### Passthrough of upstream `_skipped` records
 
-If an input record already has `_skipped: true` (set by vacuum), hash passes it through unchanged:
+If an input record already has `_skipped: true` (set by vacuum), hash passes it through:
 - Does NOT attempt to hash the file
 - Does NOT modify `_skipped` or `_warnings`
-- Does NOT add `bytes_hash` or `hash_algorithm`
+- DOES set `bytes_hash: null` and `hash_algorithm: null` (so every hash.v0 record has a uniform schema — downstream tools can always check `bytes_hash` without testing for field presence)
 - DOES update `version` to `"hash.v0"` and merge `tool_versions`
 
 ### New `_skipped` records from hash
@@ -233,16 +236,22 @@ This accumulation is how downstream tools (`fingerprint`, `lock`) know which too
 
 Per-file hashing failures are NOT refusals. They are recorded as `_skipped: true` records with `_warnings` (typically with `code: "E_IO"`) and cause exit code `1` (partial). Refusals are reserved for pipeline-level inability to operate.
 
-Refusal envelope (same as all spine tools):
+Refusal JSON envelope (same wrapper as all spine tools):
 
 ```json
 {
-  "code": "E_BAD_INPUT",
-  "message": "Input is not valid JSONL",
-  "detail": { "line": 42, "error": "expected value at line 1 column 1" },
-  "next_command": null
+  "version": "hash.v0",
+  "outcome": "REFUSAL",
+  "refusal": {
+    "code": "E_BAD_INPUT",
+    "message": "Input is not valid JSONL",
+    "detail": { "line": 42, "error": "expected value at line 1 column 1" },
+    "next_command": null
+  }
 }
 ```
+
+On refusal the envelope is a single JSON object emitted to stdout (not JSONL, not a stream record). Exit code is `2`.
 
 ### Refusal detail schemas
 
@@ -273,26 +282,67 @@ When `--progress` is provided, hash emits structured JSONL to stderr:
 
 ---
 
+## Witness Record
+
+hash's witness record follows the standard `witness.v0` schema:
+
+```json
+{
+  "id": "blake3:...",
+  "tool": "hash",
+  "version": "0.1.0",
+  "binary_hash": "blake3:...",
+  "inputs": [
+    { "path": "stdin", "hash": null, "bytes": null }
+  ],
+  "params": { "algorithm": "sha256", "jobs": 4 },
+  "outcome": "ALL_HASHED",
+  "exit_code": 0,
+  "output_hash": "blake3:...",
+  "prev": "blake3:...",
+  "ts": "2026-02-24T10:00:00Z"
+}
+```
+
+For hash, `inputs` describes the JSONL source: `"stdin"` when piped, or the file path when a positional argument is given. `inputs[].hash` and `inputs[].bytes` are `null` for stdin (consumed during reading); when a file argument is provided, `hash` and `bytes` can be populated after reading. The `output_hash` is BLAKE3 of the full JSONL output (per spine witness protocol).
+
+---
+
 ## Implementation Notes
+
+### Key dependencies
+
+| Crate | Purpose |
+|-------|---------|
+| `clap` | CLI argument parsing (derive API) |
+| `serde` + `serde_json` | JSONL serialization/deserialization |
+| `sha2` | Streaming SHA-256 computation |
+| `blake3` | Streaming BLAKE3 computation + witness record hashing |
+| `chrono` | ISO 8601 timestamp formatting |
+| `rayon` | Parallel hashing worker pool (or custom channel-based alternative) |
 
 ### Execution flow
 
 ```
  1. Parse CLI args (clap)               → exit 2 on bad args; --version handled by clap
- 2. If --describe: print operator.json to stdout, exit 0
- 3. If --schema: print JSON Schema to stdout, exit 0
- 4. Open input (file or stdin)
- 5. For each JSONL line:
+ 2. If witness subcommand: dispatch to witness query/last/count, exit
+ 3. If --describe: print operator.json to stdout, exit 0
+ 4. If --schema: print JSON Schema to stdout, exit 0
+ 5. Open input (file or stdin)
+ 6. For each JSONL line:
     a. Parse as JSON                     → E_BAD_INPUT if not valid JSON (STOP)
     b. Extract required fields (path)    → E_BAD_INPUT if missing (STOP)
+    → On refusal (steps 6a/6b): emit refusal envelope to stdout, append
+      witness record with outcome "REFUSAL" (if not --no-witness), exit 2
     c. If _skipped: true, pass through   → update version + tool_versions only
     d. Read file at `path`               → if fail: mark _skipped, append _warning, continue
     e. Hash file bytes (streaming)       → set bytes_hash, hash_algorithm
     f. Update version, merge tool_versions
     g. Serialize and emit to stdout
- 6. Track: any _skipped records? → exit 1 if yes, exit 0 if all clean
- 7. Append witness record (if not --no-witness)
- 8. Exit
+ 7. Track: any _skipped records? → exit 1 if yes, exit 0 if all clean
+ 8. Append witness record (if not --no-witness); output_hash is
+    BLAKE3 of the full JSONL output (per spine witness protocol)
+ 9. Exit
 ```
 
 ### Streaming hash computation
@@ -372,6 +422,57 @@ pub enum Outcome {
     Partial,     // exit 1
     Refusal,     // exit 2
 }
+
+// === CLI ===
+
+#[derive(Parser)]
+pub struct Cli {
+    #[command(subcommand)]
+    pub command: Option<Command>,
+
+    /// JSONL manifest file (default: stdin)
+    pub input: Option<PathBuf>,
+
+    /// Hash algorithm: sha256 or blake3
+    #[arg(long, default_value = "sha256")]
+    pub algorithm: String,
+
+    /// Number of parallel workers (default: CPU count)
+    #[arg(long)]
+    pub jobs: Option<usize>,
+
+    /// Suppress witness ledger recording
+    #[arg(long)]
+    pub no_witness: bool,
+
+    /// Emit progress to stderr
+    #[arg(long)]
+    pub progress: bool,
+
+    /// Print operator.json and exit
+    #[arg(long)]
+    pub describe: bool,
+
+    /// Print JSON Schema and exit
+    #[arg(long)]
+    pub schema: bool,
+}
+
+#[derive(Subcommand)]
+pub enum Command {
+    /// Query the witness ledger
+    Witness {
+        #[command(subcommand)]
+        action: WitnessAction,
+    },
+}
+
+#[derive(Subcommand)]
+pub enum WitnessAction {
+    Query { /* filter flags */ },
+    Last,
+    Count { /* filter flags */ },
+}
 ```
 
 ### Module structure
@@ -379,7 +480,7 @@ pub enum Outcome {
 ```
 src/
 ├── cli/
-│   ├── args.rs          # clap derive Args struct
+│   ├── args.rs          # clap derive Cli / Command / WitnessAction
 │   ├── algorithm.rs     # Algorithm enum, parsing from CLI string
 │   ├── exit.rs          # Outcome, exit_code()
 │   └── mod.rs
@@ -408,7 +509,7 @@ src/
 │   ├── ledger.rs        # Append to witness ledger
 │   ├── query.rs         # Witness query subcommands
 │   └── mod.rs
-├── lib.rs               # pub fn run() → Result<u8, Box<dyn Error>>
+├── lib.rs               # pub fn run() → u8 (handles errors internally, returns exit code)
 └── main.rs              # Minimal: calls hash::run(), maps to ExitCode
 ```
 
