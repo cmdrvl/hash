@@ -114,7 +114,7 @@ fn handle_main_workflow(cli: &cli::Cli) -> RunResult {
     };
 
     // Process JSONL stream
-    match process_jsonl_stream(input_reader, algorithm) {
+    match process_jsonl_stream(input_reader, algorithm, cli.progress) {
         Ok(stream_outcome) => RunResult::new(stream_outcome.outcome, stream_outcome.output_hash),
         Err(refusal_envelope) => refusal_result(*refusal_envelope),
     }
@@ -123,6 +123,7 @@ fn handle_main_workflow(cli: &cli::Cli) -> RunResult {
 fn process_jsonl_stream(
     mut reader: Box<dyn std::io::BufRead>,
     algorithm: cli::Algorithm,
+    progress_enabled: bool,
 ) -> Result<StreamOutcome, Box<refusal::RefusalEnvelope>> {
     use std::io::BufRead;
     use std::io::Write;
@@ -130,8 +131,11 @@ fn process_jsonl_stream(
     let mut line_number = 0;
     let mut buffer = String::new();
     let mut any_skipped = false;
+    let mut processed = 0usize;
     let mut stdout = std::io::stdout();
+    let mut stderr = std::io::stderr();
     let mut output_hasher = blake3::Hasher::new();
+    let progress_started_at = std::time::Instant::now();
 
     loop {
         buffer.clear();
@@ -187,6 +191,15 @@ fn process_jsonl_stream(
                         );
                     }
                     Err(io_err) => {
+                        let warning_message = format!("skipped: {io_err}");
+                        if progress_enabled {
+                            let warning_event =
+                                progress::WarningEvent::new(&path_str, &warning_message);
+                            let _ = progress::write_warning(&mut stderr, &warning_event);
+                        } else {
+                            eprintln!("hash: warning: {path_str}: {warning_message}");
+                        }
+
                         // IO failure - mark as skipped with warning
                         record = pipeline::enricher::process_io_failed_record(
                             record,
@@ -207,6 +220,14 @@ fn process_jsonl_stream(
             .write_all(&rendered)
             .map_err(|err| Box::new(refusal::RefusalEnvelope::io_error(err.to_string())))?;
         output_hasher.update(&rendered);
+
+        processed += 1;
+        if progress_enabled {
+            let elapsed_ms =
+                u64::try_from(progress_started_at.elapsed().as_millis()).unwrap_or(u64::MAX);
+            let progress_event = progress::ProgressEvent::new(processed, processed, elapsed_ms);
+            let _ = progress::write_progress(&mut stderr, &progress_event);
+        }
     }
 
     // Determine final outcome based on whether any records were skipped

@@ -1,3 +1,3 @@
 pub mod reporter;
 
-pub use reporter::{ProgressEvent, write_progress};
+pub use reporter::{ProgressEvent, WarningEvent, write_progress, write_warning};
