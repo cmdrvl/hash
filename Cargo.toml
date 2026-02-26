@@ -1,0 +1,28 @@
+[package]
+name = "hash"
+version = "0.1.0"
+edition = "2024"
+description = "Streaming content hashing — adds SHA-256 or BLAKE3 byte identity to every artifact in a manifest"
+repository = "https://github.com/cmdrvl/hash"
+license = "MIT"
+authors = ["CMD+RVL <hello@cmdrvl.com>"]
+
+[[bin]]
+name = "hash"
+path = "src/main.rs"
+
+[dependencies]
+clap = { version = "4.4", features = ["derive"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+sha2 = "0.10"
+blake3 = "1.5"
+chrono = { version = "0.4", features = ["serde"] }
+rayon = "1.8"
+
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true
