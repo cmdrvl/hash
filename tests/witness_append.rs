@@ -38,9 +38,11 @@ fn appends_witness_record_by_default() {
     assert_eq!(witness["tool"], "hash");
     assert_eq!(witness["outcome"], "ALL_HASHED");
     assert_eq!(witness["exit_code"], 0);
-    assert!(witness["output_hash"]
-        .as_str()
-        .is_some_and(|hash| hash.starts_with("blake3:")));
+    assert!(
+        witness["output_hash"]
+            .as_str()
+            .is_some_and(|hash| hash.starts_with("blake3:"))
+    );
 
     let _ = fs::remove_file(witness_path);
 }
