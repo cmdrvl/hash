@@ -22,3 +22,8 @@ pub fn filter_records<'a>(
         })
         .collect()
 }
+
+pub fn handle_witness_query(action: &crate::cli::WitnessAction) -> Result<u8, String> {
+    let _ = action;
+    Ok(0)
+}
