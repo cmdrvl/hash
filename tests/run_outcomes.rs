@@ -35,8 +35,8 @@ fn witness_subcommands_route_to_witness_handler_exit_codes() {
     let mut cli = base_cli();
     cli.command = Some(Command::Witness {
         action: WitnessAction::Query {
-            tool: None,
-            since: None,
+            tool: Some("__no_such_tool__".to_string()),
+            since: Some("2999-01-01T00:00:00Z".to_string()),
             until: None,
             outcome: None,
             input_hash: None,
