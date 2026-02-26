@@ -48,6 +48,34 @@ fn appends_witness_record_by_default() {
 }
 
 #[test]
+fn appends_witness_records_across_multiple_runs() {
+    let witness_path = unique_path("append-chain").with_extension("jsonl");
+
+    for _ in 0..2 {
+        let output = Command::new(env!("CARGO_BIN_EXE_hash"))
+            .env("EPISTEMIC_WITNESS", &witness_path)
+            .output()
+            .expect("hash binary should run");
+        assert!(output.status.success());
+    }
+
+    let contents = fs::read_to_string(&witness_path).expect("witness file should be written");
+    let lines: Vec<&str> = contents
+        .lines()
+        .filter(|line| !line.trim().is_empty())
+        .collect();
+    assert_eq!(lines.len(), 2);
+
+    for line in lines {
+        let witness: Value = serde_json::from_str(line).expect("witness line should be valid json");
+        assert_eq!(witness["version"], "witness.v0");
+        assert_eq!(witness["tool"], "hash");
+    }
+
+    let _ = fs::remove_file(witness_path);
+}
+
+#[test]
 fn no_witness_flag_skips_append() {
     let witness_path = unique_path("disabled").with_extension("jsonl");
 
