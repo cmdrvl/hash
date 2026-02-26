@@ -5,6 +5,10 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 static TEMP_FILE_COUNTER: AtomicU64 = AtomicU64::new(0);
+const EMPTY_SHA256_HEX: &str = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
+const EMPTY_BLAKE3_HEX: &str = "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262";
+const ABC_SHA256_HEX: &str = "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad";
+const ABC_BLAKE3_HEX: &str = "6437b3ac38465133ffb63b75273a8db548c558465d79db03fd359c6cd5bd9d85";
 
 fn temp_file_path() -> PathBuf {
     let mut path = std::env::temp_dir();
@@ -81,6 +85,32 @@ fn large_inputs_hash_deterministically() {
     let first_blake = compute::hash_file(&path, Algorithm::Blake3).expect("first blake3");
     let second_blake = compute::hash_file(&path, Algorithm::Blake3).expect("second blake3");
     assert_eq!(first_blake, second_blake);
+
+    let _ = std::fs::remove_file(path);
+}
+
+#[test]
+fn empty_file_matches_known_vectors() {
+    let path = write_temp_file(b"");
+
+    let sha = sha256::hash_file(&path).expect("empty sha256");
+    assert_eq!(sha, format!("sha256:{EMPTY_SHA256_HEX}"));
+
+    let blake = blake3::hash_file(&path).expect("empty blake3");
+    assert_eq!(blake, format!("blake3:{EMPTY_BLAKE3_HEX}"));
+
+    let _ = std::fs::remove_file(path);
+}
+
+#[test]
+fn abc_matches_known_vectors() {
+    let path = write_temp_file(b"abc");
+
+    let sha = sha256::hash_file(&path).expect("abc sha256");
+    assert_eq!(sha, format!("sha256:{ABC_SHA256_HEX}"));
+
+    let blake = blake3::hash_file(&path).expect("abc blake3");
+    assert_eq!(blake, format!("blake3:{ABC_BLAKE3_HEX}"));
 
     let _ = std::fs::remove_file(path);
 }
