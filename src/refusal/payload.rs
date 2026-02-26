@@ -2,14 +2,14 @@ use super::codes::RefusalCode;
 use serde::Serialize;
 use serde_json::{Value, json};
 
-#[derive(Debug, Clone, Serialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, serde::Deserialize, PartialEq)]
 pub struct RefusalEnvelope {
     pub version: &'static str,
     pub outcome: &'static str,
     pub refusal: Refusal,
 }
 
-#[derive(Debug, Clone, Serialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, serde::Deserialize, PartialEq)]
 pub struct Refusal {
     pub code: &'static str,
     pub message: String,

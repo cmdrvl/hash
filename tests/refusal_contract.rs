@@ -9,7 +9,10 @@ fn refusal_codes_map_to_contract_values() {
         RefusalCode::BadInput.default_message(),
         "Input is not valid JSONL or missing required fields"
     );
-    assert_eq!(RefusalCode::Io.default_message(), "Cannot read input/output stream");
+    assert_eq!(
+        RefusalCode::Io.default_message(),
+        "Cannot read input/output stream"
+    );
 }
 
 #[test]
@@ -22,7 +25,10 @@ fn bad_input_parse_error_shape_is_stable() {
         refusal.refusal.message,
         "Input is not valid JSONL or missing required fields"
     );
-    assert_eq!(refusal.refusal.detail, json!({"line": 7, "error": "expected value"}));
+    assert_eq!(
+        refusal.refusal.detail,
+        json!({"line": 7, "error": "expected value"})
+    );
     assert!(refusal.refusal.next_command.is_none());
 }
 

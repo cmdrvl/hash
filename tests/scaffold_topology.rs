@@ -36,9 +36,11 @@ fn scaffold_ordered_results_emits_in_input_order() {
 
 #[test]
 fn scaffold_reader_output_refusal_and_witness_stubs_are_wired() {
-    let parsed = parse_json_line(r#"{"path":"/tmp/file.csv"}"#, 7).expect("valid json");
+    let parsed = parse_json_line(r#"{"path":"/tmp/file.csv","version":"vacuum.v0"}"#, 7)
+        .expect("valid json");
     assert_eq!(parsed.line_number, 7);
     assert_eq!(parsed.record["path"], "/tmp/file.csv");
+    assert_eq!(parsed.record["version"], "vacuum.v0");
 
     let mut output = Vec::new();
     write_json_line(&mut output, &json!({"ok": true})).expect("json line write");
