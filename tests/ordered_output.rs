@@ -1,6 +1,7 @@
 use hash::output::jsonl::write_json_line;
-use hash::pipeline::parallel::OrderedResults;
+use hash::pipeline::parallel::{OrderedResults, normalized_jobs, process_indexed_in_parallel};
 use serde_json::json;
+use std::time::Duration;
 
 #[test]
 fn ordered_results_flushes_only_when_contiguous() {
@@ -38,4 +39,27 @@ fn jsonl_writer_emits_compact_single_line_records() {
     let rendered = String::from_utf8(output).expect("valid utf8");
     assert_eq!(rendered, "{\"a\":1,\"b\":\"x\",\"nested\":{\"k\":true}}\n");
     assert_eq!(rendered.lines().count(), 1);
+}
+
+#[test]
+fn jobs_normalization_honors_defaults_and_lower_bound() {
+    assert!(normalized_jobs(None) >= 1);
+    assert_eq!(normalized_jobs(Some(0)), 1);
+    assert_eq!(normalized_jobs(Some(6)), 6);
+}
+
+#[test]
+fn parallel_processing_matches_sequential_order_and_values() {
+    fn simulate_work((index, value): (usize, usize)) -> String {
+        let delay_ms = ((17 - (index % 17)) % 17) as u64;
+        std::thread::sleep(Duration::from_millis(delay_ms));
+        format!("{index}:{value}")
+    }
+
+    let inputs: Vec<usize> = (0..64).collect();
+
+    let sequential = process_indexed_in_parallel(inputs.clone(), 1, simulate_work);
+    let parallel = process_indexed_in_parallel(inputs, 4, simulate_work);
+
+    assert_eq!(parallel, sequential);
 }
