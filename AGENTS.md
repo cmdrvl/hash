@@ -184,19 +184,48 @@ br close <id> --reason "Completed"
 br sync --flush-only  # Export to JSONL (no git ops)
 ```
 
-Pick unblocked beads. Mark in-progress before coding. Close with validation evidence.
+### Kickoff Loop
+
+1. Run `br ready` to see unblocked beads sorted by priority.
+2. Claim one bead: `br update <id> --status in_progress`
+3. Read the bead: `br show <id>`
+4. Start implementation immediately — do not ask for confirmation.
+5. Verify acceptance criteria are met.
+6. Run quality gate.
+7. Close: `br update <id> --status closed`
+8. Run `br ready` again and claim the next unblocked bead.
+
+Avoid communication purgatory: if blocked, claim another ready bead and continue.
 
 ---
 
-## Agent Mail (Multi-Agent Sessions)
+## Multi-Agent Coordination
+
+### File Reservation Policy (strict)
+
+When multiple agents work concurrently, reserve only exact files you are actively editing.
+
+Allowed: `src/hash/sha256.rs`, `tests/hash_suite.rs`, `README.md`
+Forbidden: `src/**`, `src/hash/`, `tests/**`
+
+Release reservations as soon as your edits are complete.
+
+### Concurrent Edit Protocol
+
+Expect concurrent local edits from other agents.
+
+1. Never assume a clean working tree.
+2. Never use destructive commands to force a clean state.
+3. If you encounter unexpected changes in a file you need, check if another agent has reserved it.
+4. Resolve conflicts surgically — fix only the conflicting region.
+5. Do not reformat or reorganize files you did not change.
+
+### Agent Mail
 
 When Agent Mail is available:
-
 - Register identity in this project.
-- Reserve only specific files you are actively editing — never entire directories.
 - Send start/finish updates per bead.
 - Poll inbox regularly and acknowledge `ack_required` messages promptly.
-- Release reservations when done.
 
 ---
 
