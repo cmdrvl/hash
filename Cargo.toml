@@ -20,6 +20,10 @@ blake3 = "1.5"
 chrono = { version = "0.4", features = ["serde"] }
 rayon = "1.8"
 
+[dev-dependencies]
+assert_cmd = "2.0"
+predicates = "3.0"
+
 [profile.release]
 opt-level = "z"
 lto = true
