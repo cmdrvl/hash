@@ -145,6 +145,51 @@ fn last_returns_null_and_exit_one_when_ledger_is_empty() {
 }
 
 #[test]
+fn last_returns_most_recent_record_and_exit_zero_when_ledger_has_rows() {
+    let witness_path = unique_path("last-latest");
+    write_witness_records(&witness_path, &sample_records());
+
+    let output = run_hash_with_witness(&witness_path, &["witness", "last", "--json"]);
+    assert_eq!(output.status.code(), Some(0));
+
+    let stdout = String::from_utf8(output.stdout).expect("stdout utf8");
+    let parsed: Value = serde_json::from_str(&stdout).expect("last json output");
+    assert_eq!(parsed["tool"], "hash");
+    assert_eq!(parsed["outcome"], "PARTIAL");
+    assert_eq!(parsed["output_hash"], "blake3:ccc333");
+
+    let _ = fs::remove_file(witness_path);
+}
+
+#[test]
+fn query_skips_malformed_lines_and_keeps_valid_matches() {
+    let witness_path = unique_path("query-malformed");
+    if let Some(parent) = witness_path.parent() {
+        fs::create_dir_all(parent).expect("create witness parent");
+    }
+    let mut file = fs::File::create(&witness_path).expect("create witness file");
+    writeln!(file, "{{\"broken\":").expect("write malformed line");
+    for record in sample_records() {
+        let line = serde_json::to_string(&record).expect("serialize witness line");
+        writeln!(file, "{line}").expect("write witness line");
+    }
+
+    let output = run_hash_with_witness(
+        &witness_path,
+        &["witness", "query", "--tool", "hash", "--json"],
+    );
+    assert_eq!(output.status.code(), Some(0));
+
+    let stdout = String::from_utf8(output.stdout).expect("stdout utf8");
+    let parsed: Value = serde_json::from_str(&stdout).expect("query json output");
+    let rows = parsed.as_array().expect("array output");
+    assert_eq!(rows.len(), 2);
+    assert!(rows.iter().all(|row| row["tool"] == "hash"));
+
+    let _ = fs::remove_file(witness_path);
+}
+
+#[test]
 fn count_outputs_json_and_respects_match_exit_codes() {
     let witness_path = unique_path("count-json");
     write_witness_records(&witness_path, &sample_records());
