@@ -27,11 +27,11 @@ impl WitnessRecord {
         outcome: impl Into<String>,
         exit_code: u8,
         params: Map<String, Value>,
-        output_bytes: &[u8],
+        output_hash: String,
     ) -> Self {
         let mut record = Self::new("hash", outcome, exit_code);
         record.params = params;
-        record.output_hash = Some(format!("blake3:{}", blake3::hash(output_bytes).to_hex()));
+        record.output_hash = Some(output_hash);
         record
     }
 }

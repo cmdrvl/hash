@@ -1,6 +1,7 @@
 #![forbid(unsafe_code)]
 
 use clap::Parser;
+use serde_json::{Map, Value};
 
 pub mod cli;
 pub mod hash;
@@ -9,6 +10,29 @@ pub mod pipeline;
 pub mod progress;
 pub mod refusal;
 pub mod witness;
+
+struct RunResult {
+    outcome: cli::Outcome,
+    output_hash: String,
+}
+
+impl RunResult {
+    fn new(outcome: cli::Outcome, output_hash: String) -> Self {
+        Self {
+            outcome,
+            output_hash,
+        }
+    }
+
+    fn exit_code(&self) -> u8 {
+        self.outcome.exit_code()
+    }
+}
+
+struct StreamOutcome {
+    outcome: cli::Outcome,
+    output_hash: String,
+}
 
 /// Main entry point that handles all errors internally and returns exit code
 pub fn run() -> u8 {
@@ -33,7 +57,9 @@ pub fn run_with_cli(cli: cli::Cli) -> u8 {
     }
 
     // Handle main hashing workflow
-    handle_main_workflow(&cli)
+    let result = handle_main_workflow(&cli);
+    append_witness_non_fatal(&cli, &result);
+    result.exit_code()
 }
 
 fn print_operator_json() {
@@ -75,20 +101,18 @@ fn handle_witness_command(action: &cli::WitnessAction) -> u8 {
     }
 }
 
-fn handle_main_workflow(cli: &cli::Cli) -> u8 {
+fn handle_main_workflow(cli: &cli::Cli) -> RunResult {
     // Validate and parse algorithm
     let algorithm = match cli.algorithm.parse::<cli::Algorithm>() {
         Ok(alg) => alg,
         Err(err) => {
-            let refusal = refusal::RefusalEnvelope::from_code(
+            return refusal_result(refusal::RefusalEnvelope::from_code(
                 refusal::RefusalCode::BadInput,
                 serde_json::json!({
                     "algorithm": cli.algorithm,
                     "error": err
                 }),
-            );
-            println!("{}", serde_json::to_string(&refusal).unwrap());
-            return 2;
+            ));
         }
     };
 
@@ -97,9 +121,7 @@ fn handle_main_workflow(cli: &cli::Cli) -> u8 {
         Some(path) => match std::fs::File::open(path) {
             Ok(file) => Box::new(std::io::BufReader::new(file)),
             Err(err) => {
-                let refusal = refusal::RefusalEnvelope::io_error(err.to_string());
-                println!("{}", serde_json::to_string(&refusal).unwrap());
-                return 2;
+                return refusal_result(refusal::RefusalEnvelope::io_error(err.to_string()));
             }
         },
         None => Box::new(std::io::BufReader::new(std::io::stdin())),
@@ -107,23 +129,23 @@ fn handle_main_workflow(cli: &cli::Cli) -> u8 {
 
     // Process JSONL stream
     match process_jsonl_stream(input_reader, algorithm) {
-        Ok(outcome) => cli::exit_code(outcome),
-        Err(refusal_envelope) => {
-            println!("{}", serde_json::to_string(&refusal_envelope).unwrap());
-            2
-        }
+        Ok(stream_outcome) => RunResult::new(stream_outcome.outcome, stream_outcome.output_hash),
+        Err(refusal_envelope) => refusal_result(*refusal_envelope),
     }
 }
 
 fn process_jsonl_stream(
     mut reader: Box<dyn std::io::BufRead>,
     algorithm: cli::Algorithm,
-) -> Result<cli::Outcome, Box<refusal::RefusalEnvelope>> {
+) -> Result<StreamOutcome, Box<refusal::RefusalEnvelope>> {
     use std::io::BufRead;
+    use std::io::Write;
 
     let mut line_number = 0;
     let mut buffer = String::new();
     let mut any_skipped = false;
+    let mut stdout = std::io::stdout();
+    let mut output_hasher = blake3::Hasher::new();
 
     loop {
         buffer.clear();
@@ -192,14 +214,71 @@ fn process_jsonl_stream(
         }
 
         // Emit processed record as JSONL
-        output::jsonl::write_json_line(&mut std::io::stdout(), &record)
+        let mut rendered = Vec::new();
+        output::jsonl::write_json_line(&mut rendered, &record)
             .map_err(|err| Box::new(refusal::RefusalEnvelope::io_error(err.to_string())))?;
+        stdout
+            .write_all(&rendered)
+            .map_err(|err| Box::new(refusal::RefusalEnvelope::io_error(err.to_string())))?;
+        output_hasher.update(&rendered);
     }
 
     // Determine final outcome based on whether any records were skipped
-    if any_skipped {
-        Ok(cli::Outcome::Partial)
+    let outcome = if any_skipped {
+        cli::Outcome::Partial
     } else {
-        Ok(cli::Outcome::AllHashed)
+        cli::Outcome::AllHashed
+    };
+
+    Ok(StreamOutcome {
+        outcome,
+        output_hash: format!("blake3:{}", output_hasher.finalize().to_hex()),
+    })
+}
+
+fn refusal_result(refusal: refusal::RefusalEnvelope) -> RunResult {
+    let rendered = serde_json::to_string(&refusal).unwrap();
+    println!("{rendered}");
+    RunResult::new(
+        cli::Outcome::Refusal,
+        hash_bytes(format!("{rendered}\n").as_bytes()),
+    )
+}
+
+fn append_witness_non_fatal(cli: &cli::Cli, result: &RunResult) {
+    if cli.no_witness {
+        return;
     }
+
+    let record = witness::WitnessRecord::from_run(
+        outcome_label(result.outcome),
+        result.exit_code(),
+        witness_params(cli),
+        result.output_hash.clone(),
+    );
+
+    if let Err(err) = witness::append_default_record(&record) {
+        eprintln!("hash: warning: witness append failed: {err}");
+    }
+}
+
+fn witness_params(cli: &cli::Cli) -> Map<String, Value> {
+    let mut params = Map::new();
+    params.insert("algorithm".to_owned(), Value::String(cli.algorithm.clone()));
+    if let Some(jobs) = cli.jobs {
+        params.insert("jobs".to_owned(), Value::from(jobs));
+    }
+    params
+}
+
+fn outcome_label(outcome: cli::Outcome) -> &'static str {
+    match outcome {
+        cli::Outcome::AllHashed => "ALL_HASHED",
+        cli::Outcome::Partial => "PARTIAL",
+        cli::Outcome::Refusal => "REFUSAL",
+    }
+}
+
+fn hash_bytes(bytes: &[u8]) -> String {
+    format!("blake3:{}", blake3::hash(bytes).to_hex())
 }
