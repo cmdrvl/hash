@@ -94,16 +94,14 @@ fn handle_main_workflow(cli: &cli::Cli) -> u8 {
 
     // Open input source (file or stdin)
     let input_reader: Box<dyn std::io::BufRead> = match &cli.input {
-        Some(path) => {
-            match std::fs::File::open(path) {
-                Ok(file) => Box::new(std::io::BufReader::new(file)),
-                Err(err) => {
-                    let refusal = refusal::RefusalEnvelope::io_error(err.to_string());
-                    println!("{}", serde_json::to_string(&refusal).unwrap());
-                    return 2;
-                }
+        Some(path) => match std::fs::File::open(path) {
+            Ok(file) => Box::new(std::io::BufReader::new(file)),
+            Err(err) => {
+                let refusal = refusal::RefusalEnvelope::io_error(err.to_string());
+                println!("{}", serde_json::to_string(&refusal).unwrap());
+                return 2;
             }
-        }
+        },
         None => Box::new(std::io::BufReader::new(std::io::stdin())),
     };
 
@@ -129,9 +127,9 @@ fn process_jsonl_stream(
 
     loop {
         buffer.clear();
-        let bytes_read = reader.read_line(&mut buffer).map_err(|err| {
-            Box::new(refusal::RefusalEnvelope::io_error(err.to_string()))
-        })?;
+        let bytes_read = reader
+            .read_line(&mut buffer)
+            .map_err(|err| Box::new(refusal::RefusalEnvelope::io_error(err.to_string())))?;
 
         // End of input
         if bytes_read == 0 {
@@ -165,9 +163,10 @@ fn process_jsonl_stream(
                             line_number,
                             "path",
                         ))
-                    })?;
+                    })?
+                    .to_owned();
 
-                let path = std::path::Path::new(path_str);
+                let path = std::path::Path::new(&path_str);
 
                 // Attempt to hash the file
                 match hash::hash_file(path, algorithm) {
@@ -176,14 +175,14 @@ fn process_jsonl_stream(
                         record = pipeline::enricher::process_hashed_record(
                             record,
                             file_hash,
-                            algorithm.as_str(),
+                            algorithm.prefix(),
                         );
                     }
                     Err(io_err) => {
                         // IO failure - mark as skipped with warning
                         record = pipeline::enricher::process_io_failed_record(
                             record,
-                            path_str,
+                            &path_str,
                             &io_err.to_string(),
                         );
                         any_skipped = true;
@@ -193,9 +192,8 @@ fn process_jsonl_stream(
         }
 
         // Emit processed record as JSONL
-        output::jsonl::write_json_line(&mut std::io::stdout(), &record).map_err(|err| {
-            Box::new(refusal::RefusalEnvelope::io_error(err.to_string()))
-        })?;
+        output::jsonl::write_json_line(&mut std::io::stdout(), &record)
+            .map_err(|err| Box::new(refusal::RefusalEnvelope::io_error(err.to_string())))?;
     }
 
     // Determine final outcome based on whether any records were skipped

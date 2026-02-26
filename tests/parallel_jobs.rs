@@ -32,3 +32,20 @@ fn process_indexed_in_parallel_is_deterministic_for_jobs_many() {
 
     assert_eq!(output, vec![0, 1, 2, 3, 4, 5]);
 }
+
+#[test]
+fn sequential_and_parallel_outputs_match_exactly() {
+    let inputs = vec![9_u64, 0, 7, 1, 5, 2, 3, 8, 6, 4];
+
+    let sequential = process_indexed_in_parallel(inputs.clone(), 1, |(index, delay_ms)| {
+        std::thread::sleep(Duration::from_millis(delay_ms));
+        format!("{index}:{delay_ms}")
+    });
+
+    let parallel = process_indexed_in_parallel(inputs, 8, |(index, delay_ms)| {
+        std::thread::sleep(Duration::from_millis(delay_ms));
+        format!("{index}:{delay_ms}")
+    });
+
+    assert_eq!(parallel, sequential);
+}
