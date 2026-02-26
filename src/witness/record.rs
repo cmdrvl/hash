@@ -8,6 +8,7 @@ pub struct WitnessRecord {
     pub outcome: String,
     pub exit_code: u8,
     pub output_hash: Option<String>,
+    pub ts: Option<String>,
     pub params: Map<String, Value>,
 }
 
@@ -19,6 +20,7 @@ impl WitnessRecord {
             outcome: outcome.into(),
             exit_code,
             output_hash: None,
+            ts: None,
             params: Map::new(),
         }
     }
@@ -32,6 +34,7 @@ impl WitnessRecord {
         let mut record = Self::new("hash", outcome, exit_code);
         record.params = params;
         record.output_hash = Some(output_hash);
+        record.ts = Some(chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Secs, true));
         record
     }
 }

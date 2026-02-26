@@ -81,23 +81,9 @@ fn print_json_schema() {
 }
 
 fn handle_witness_command(action: &cli::WitnessAction) -> u8 {
-    match action {
-        cli::WitnessAction::Query { json, .. } => {
-            if *json {
-                println!("[]");
-            }
-            cli::exit_code(cli::Outcome::Partial)
-        }
-        cli::WitnessAction::Last { json } => {
-            if *json {
-                println!("null");
-            }
-            cli::exit_code(cli::Outcome::Partial)
-        }
-        cli::WitnessAction::Count { .. } => {
-            println!("0");
-            cli::exit_code(cli::Outcome::Partial)
-        }
+    match witness::query::handle_witness_query(action) {
+        Ok(exit_code) => exit_code,
+        Err(_) => cli::exit_code(cli::Outcome::Refusal),
     }
 }
 

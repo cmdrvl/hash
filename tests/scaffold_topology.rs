@@ -57,7 +57,11 @@ fn scaffold_reader_output_refusal_and_witness_stubs_are_wired() {
         &records,
         &WitnessQuery {
             tool: Some("hash".to_owned()),
+            since: None,
+            until: None,
             outcome: Some("REFUSAL".to_owned()),
+            input_hash: None,
+            limit: None,
         },
     );
     assert_eq!(filtered.len(), 1);
