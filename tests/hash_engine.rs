@@ -1,7 +1,10 @@
 use hash::cli::Algorithm;
 use hash::hash::{blake3, compute, sha256};
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
+
+static TEMP_FILE_COUNTER: AtomicU64 = AtomicU64::new(0);
 
 fn temp_file_path() -> PathBuf {
     let mut path = std::env::temp_dir();
@@ -9,7 +12,11 @@ fn temp_file_path() -> PathBuf {
         .duration_since(UNIX_EPOCH)
         .expect("system clock before unix epoch")
         .as_nanos();
-    path.push(format!("hash-engine-{}-{ts_nanos}.bin", std::process::id()));
+    let counter = TEMP_FILE_COUNTER.fetch_add(1, Ordering::Relaxed);
+    path.push(format!(
+        "hash-engine-{}-{ts_nanos}-{counter}.bin",
+        std::process::id()
+    ));
     path
 }
 
