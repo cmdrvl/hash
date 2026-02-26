@@ -165,10 +165,12 @@ fn handle_main_workflow(cli: &cli::Cli) -> u8 {
     let _algorithm = match cli.algorithm.parse::<cli::Algorithm>() {
         Ok(alg) => alg,
         Err(err) => {
-            let refusal = refusal::RefusalEnvelope::new(
+            let refusal = refusal::RefusalEnvelope::from_code(
                 refusal::RefusalCode::BadInput,
-                format!("Invalid algorithm: {}", err),
-                serde_json::json!({ "algorithm": cli.algorithm }),
+                serde_json::json!({
+                    "algorithm": cli.algorithm,
+                    "error": err
+                }),
             );
             println!("{}", serde_json::to_string(&refusal).unwrap());
             return 2;

@@ -13,6 +13,13 @@ impl RefusalCode {
             Self::Io => "E_IO",
         }
     }
+
+    pub fn default_message(self) -> &'static str {
+        match self {
+            Self::BadInput => "Input is not valid JSONL or missing required fields",
+            Self::Io => "Cannot read input/output stream",
+        }
+    }
 }
 
 impl fmt::Display for RefusalCode {
