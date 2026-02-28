@@ -146,16 +146,14 @@ pub fn handle_witness_query(action: &crate::cli::WitnessAction) -> Result<u8, St
             if *json {
                 let json_output = serde_json::to_string(&filtered).map_err(|e| e.to_string())?;
                 println!("{}", json_output);
+            } else if filtered.is_empty() {
+                println!("No matching witness records");
             } else {
-                if filtered.is_empty() {
-                    println!("No matching witness records");
-                } else {
-                    for record in &filtered {
-                        println!(
-                            "{} {} {} (exit: {})",
-                            record.tool, record.outcome, record.version, record.exit_code
-                        );
-                    }
+                for record in &filtered {
+                    println!(
+                        "{} {} {} (exit: {})",
+                        record.tool, record.outcome, record.version, record.exit_code
+                    );
                 }
             }
 
