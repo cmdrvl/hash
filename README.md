@@ -6,9 +6,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![GitHub release](https://img.shields.io/github/v/release/cmdrvl/hash)](https://github.com/cmdrvl/hash/releases)
 
-**Streaming content hashing — adds SHA-256 or BLAKE3 byte identity to every artifact in a manifest, enabling deduplication, caching, and immutability verification.**
-
-No AI. No inference. Pure deterministic hashing and serialization.
+**Prove what's inside every file — byte-level identity for every artifact in a manifest.**
 
 ```bash
 brew install cmdrvl/tap/hash
@@ -18,23 +16,16 @@ brew install cmdrvl/tap/hash
 
 ---
 
-## TL;DR
+You have a manifest of files. You know they exist. But if someone asks "has this file changed since Tuesday?" — timestamps lie, filenames are meaningless, and `ls -la` proves nothing. You need byte-level proof.
 
-**The Problem**: After scanning a directory, you have a manifest of files — but no proof of what's inside them. Without byte-level identity, you can't detect changes, deduplicate, or verify integrity. Manual `shasum` loops are fragile, unstructured, and don't compose.
+**hash reads each file through a 64 KB streaming buffer and adds its cryptographic identity — SHA-256 or BLAKE3 — to every record in the manifest.** Parallel by default, constant memory, deterministic output order regardless of how many workers are running. Same files in, same hashes out.
 
-**The Solution**: One streaming command that reads a JSONL manifest and adds a cryptographic hash (`bytes_hash`) to every record. Parallel by default, constant memory, deterministic output order. Same inputs always produce the same hashes.
+### What makes this different
 
-### Why Use hash?
-
-| Feature | What It Does |
-|---------|--------------|
-| **Streaming** | Constant memory — hashes files through a 64 KB buffer, never loads entire files |
-| **Parallel** | `--jobs N` workers (default: CPU count) with deterministic output ordering |
-| **Two algorithms** | SHA-256 (default, widely verified) or BLAKE3 (faster, modern) |
-| **Skipped tracking** | Unreadable files are captured with warnings, not silently dropped |
-| **Pipeline native** | Reads vacuum JSONL, emits enriched JSONL for `fingerprint` and `lock` |
-| **Deterministic** | Same manifest + same files = identical output regardless of `--jobs` |
-| **Audit trail** | Every run recorded in the ambient witness ledger |
+- **Constant memory** — 64 KB buffer per worker. A 100 GB file uses the same RAM as a 1 KB file.
+- **Parallel with deterministic ordering** — `--jobs N` workers hash simultaneously, but output order always matches input order. No surprises.
+- **Two algorithms** — SHA-256 (the default, universally accepted) or BLAKE3 (`--algorithm blake3`, faster on large files).
+- **Pipeline native** — reads `vacuum` JSONL, emits enriched JSONL for `fingerprint` and `lock`.
 
 ---
 
