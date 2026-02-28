@@ -362,6 +362,8 @@ Yes. SHA-256 of zero bytes is always `sha256:e3b0c44298fc1c149afbf4c8996fb92427a
 
 ## Agent / CI Integration
 
+For the full toolchain guide, see the [Agent Operator Guide](https://github.com/cmdrvl/.github/blob/main/profile/AGENT_PROMPT.md).
+
 ### Self-describing contract
 
 ```bash
