@@ -43,19 +43,19 @@ It tells you *exactly which bytes the file contains*, expressed as a cryptograph
 `hash` is the second tool in the stream pipeline. It reads vacuum's JSONL, adds `bytes_hash`, and emits enriched JSONL:
 
 ```bash
-vacuum /data/2025-12/ | hash | fingerprint --fp argus-model.v1 | lock --dataset-id "dec"
+vacuum /data/2025-12/ | hashbytes | fingerprint --fp argus-model.v1 | lock --dataset-id "dec"
 ```
 
 hash can also be used standalone on an existing manifest:
 
 ```bash
-hash manifest.jsonl > hashed.jsonl
+hashbytes manifest.jsonl > hashed.jsonl
 ```
 
 Or piped directly from vacuum for a lightweight lock (no fingerprinting):
 
 ```bash
-vacuum /data/2025-12/ | hash | lock --dataset-id "raw-dec" > raw.lock.json
+vacuum /data/2025-12/ | hashbytes | lock --dataset-id "raw-dec" > raw.lock.json
 ```
 
 ---
@@ -63,8 +63,8 @@ vacuum /data/2025-12/ | hash | lock --dataset-id "raw-dec" > raw.lock.json
 ## CLI (v0)
 
 ```bash
-hash [<INPUT>] [OPTIONS]
-hash witness <query|last|count> [OPTIONS]
+hashbytes [<INPUT>] [OPTIONS]
+hashbytes witness <query|last|count> [OPTIONS]
 ```
 
 ### Arguments
@@ -76,10 +76,10 @@ hash witness <query|last|count> [OPTIONS]
 - `--algorithm <ALG>`: Hash algorithm. Accepted values: `sha256` (default), `blake3`. Case-insensitive.
 - `--jobs <N>`: Number of parallel hashing workers (default: number of available CPUs). `--jobs 1` for sequential processing.
 - `--no-witness`: Suppress witness ledger recording for this run.
-- `--describe`: Print the compiled-in `operator.json` to stdout and exit 0. Checked before input is validated, so `hash --describe` works with no arguments.
+- `--describe`: Print the compiled-in `operator.json` to stdout and exit 0. Checked before input is validated, so `hashbytes --describe` works with no arguments.
 - `--schema`: Print the JSON Schema for the JSONL record to stdout and exit 0. Like `--describe`, checked before input is validated.
 - `--progress`: Emit structured progress JSONL to stderr (see Progress reporting).
-- `--version`: Print `hash <semver>` to stdout and exit 0.
+- `--version`: Print `hashbytes <semver>` to stdout and exit 0.
 
 ### Exit codes
 
@@ -106,12 +106,12 @@ Same protocol as `vacuum`, `rvl`, and `shape`:
 Witness query subcommands (same shape as rvl/shape/vacuum):
 
 ```bash
-hash witness query [--tool <name>] [--since <iso8601>] [--until <iso8601>] \
+hashbytes witness query [--tool <name>] [--since <iso8601>] [--until <iso8601>] \
   [--outcome <ALL_HASHED|PARTIAL|REFUSAL>] [--input-hash <substring>] \
   [--limit <n>] [--json]
 
-hash witness last [--json]
-hash witness count [--tool <name>] [--since <iso8601>] [--until <iso8601>] \
+hashbytes witness last [--json]
+hashbytes witness count [--tool <name>] [--since <iso8601>] [--until <iso8601>] \
   [--outcome <ALL_HASHED|PARTIAL|REFUSAL>] [--input-hash <substring>] [--json]
 ```
 
@@ -538,7 +538,7 @@ fn main() -> std::process::ExitCode {
   "license": "MIT",
 
   "invocation": {
-    "binary": "hash",
+    "binary": "hashbytes",
     "output_mode": "stream",
     "output_schema": "hash.v0",
     "json_flag": null
@@ -633,7 +633,7 @@ Provide test fixtures in `tests/fixtures/`:
 - Passthrough of upstream `_skipped` records
 - `tool_versions` accumulation
 - Ambient witness recording + `--no-witness`
-- `hash witness <query|last|count>` subcommands
+- `hashbytes witness <query|last|count>` subcommands
 - `--version` flag
 - `operator.json` + `--describe`
 - Exit codes 0/1/2
