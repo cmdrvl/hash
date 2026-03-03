@@ -1,5 +1,5 @@
-use hash::output::jsonl::write_json_line;
-use hash::pipeline::parallel::{OrderedResults, normalized_jobs, process_indexed_in_parallel};
+use hashbytes::output::jsonl::write_json_line;
+use hashbytes::pipeline::parallel::{OrderedResults, normalized_jobs, process_indexed_in_parallel};
 use serde_json::json;
 use std::time::Duration;
 

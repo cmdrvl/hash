@@ -1,10 +1,10 @@
 use clap::{CommandFactory, Parser, error::ErrorKind};
-use hash::cli::{Cli, Command, WitnessAction};
+use hashbytes::cli::{Cli, Command, WitnessAction};
 use std::path::PathBuf;
 
 #[test]
 fn parses_default_root_command() {
-    let cli = Cli::try_parse_from(["hash"]).expect("default parse should succeed");
+    let cli = Cli::try_parse_from(["hashbytes"]).expect("default parse should succeed");
     assert!(cli.command.is_none());
     assert!(cli.input.is_none());
     assert_eq!(cli.algorithm, "sha256");
@@ -89,7 +89,7 @@ fn parses_witness_query_subcommand() {
 
 #[test]
 fn parses_witness_last_and_count_subcommands() {
-    let last = Cli::try_parse_from(["hash", "witness", "last", "--json"])
+    let last = Cli::try_parse_from(["hashbytes", "witness", "last", "--json"])
         .expect("witness last parse should succeed");
     match last.command {
         Some(Command::Witness {
@@ -151,7 +151,7 @@ fn exposes_expected_long_flags_and_version_behavior() {
         assert!(long_flags.contains(&flag), "missing --{flag}");
     }
 
-    let version_err = match Cli::try_parse_from(["hash", "--version"]) {
+    let version_err = match Cli::try_parse_from(["hashbytes", "--version"]) {
         Ok(_) => panic!("version should short-circuit"),
         Err(err) => err,
     };

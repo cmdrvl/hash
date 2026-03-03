@@ -19,7 +19,7 @@ fn unique_path(suffix: &str) -> PathBuf {
 }
 
 fn run_hash_with_witness(path: &Path, args: &[&str]) -> Output {
-    Command::new(env!("CARGO_BIN_EXE_hash"))
+    Command::new(env!("CARGO_BIN_EXE_hashbytes"))
         .env("EPISTEMIC_WITNESS", path)
         .args(args)
         .output()

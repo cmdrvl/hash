@@ -7,7 +7,7 @@
   "license": "MIT",
   "agent_guide": "https://github.com/cmdrvl/.github/blob/main/profile/AGENT_PROMPT.md",
   "invocation": {
-    "binary": "hash",
+    "binary": "hashbytes",
     "output_mode": "stream",
     "output_schema": "hash.v0",
     "json_flag": null

@@ -1,5 +1,5 @@
-use hash::cli::Algorithm;
-use hash::hash::{blake3, compute, sha256};
+use hashbytes::cli::Algorithm;
+use hashbytes::hash::{blake3, compute, sha256};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};

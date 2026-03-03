@@ -1,4 +1,4 @@
-use hash::pipeline::enricher;
+use hashbytes::pipeline::enricher;
 use serde_json::{Value, json};
 
 #[test]

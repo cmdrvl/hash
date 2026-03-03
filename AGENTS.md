@@ -18,10 +18,10 @@ vacuum → hash → fingerprint → lock → pack
 
 ```bash
 # Core pipeline
-vacuum /data/dec | hash > dec.hashed.jsonl
+vacuum /data/dec | hashbytes > dec.hashed.jsonl
 
 # Alternate algorithm
-vacuum /data/dec | hash --algorithm blake3 > dec.hashed.jsonl
+vacuum /data/dec | hashbytes --algorithm blake3 > dec.hashed.jsonl
 
 # Quality gate
 cargo fmt --check && cargo clippy --all-targets -- -D warnings && cargo test

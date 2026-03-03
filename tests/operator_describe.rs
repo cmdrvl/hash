@@ -9,7 +9,7 @@ fn describe_emits_canonical_operator_manifest() {
     let expected_value: Value =
         serde_json::from_str(&expected_manifest).expect("operator.json must be valid JSON");
 
-    let output = Command::new(env!("CARGO_BIN_EXE_hash"))
+    let output = Command::new(env!("CARGO_BIN_EXE_hashbytes"))
         .arg("--describe")
         .output()
         .expect("hash binary should run");

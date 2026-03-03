@@ -23,31 +23,31 @@ jobs:
           - target: x86_64-unknown-linux-gnu
             os: ubuntu-latest
             archive_ext: tar.gz
-            bin: hash
+            bin: hashbytes
             strip: linux
             use_cross: false
           - target: aarch64-unknown-linux-gnu
             os: ubuntu-latest
             archive_ext: tar.gz
-            bin: hash
+            bin: hashbytes
             strip: linux-cross
             use_cross: true
           - target: x86_64-apple-darwin
             os: macos-15-intel
             archive_ext: tar.gz
-            bin: hash
+            bin: hashbytes
             strip: macos
             use_cross: false
           - target: aarch64-apple-darwin
             os: macos-14
             archive_ext: tar.gz
-            bin: hash
+            bin: hashbytes
             strip: macos
             use_cross: false
           - target: x86_64-pc-windows-msvc
             os: windows-latest
             archive_ext: zip
-            bin: hash.exe
+            bin: hashbytes.exe
             strip: none
             use_cross: false
 
@@ -118,10 +118,10 @@ jobs:
         run: |
           dist_dir="dist/${{ matrix.target }}"
           mkdir -p "$dist_dir"
-          cp "target/${{ matrix.target }}/release/${{ matrix.bin }}" "$dist_dir/hash"
+          cp "target/${{ matrix.target }}/release/${{ matrix.bin }}" "$dist_dir/hashbytes"
           cp README.md "$dist_dir/"
           cp LICENSE* "$dist_dir/" 2>/dev/null || true
-          tar -czf "hash-${{ steps.version.outputs.version }}-${{ matrix.target }}.tar.gz" -C "$dist_dir" .
+          tar -czf "hashbytes-${{ steps.version.outputs.version }}-${{ matrix.target }}.tar.gz" -C "$dist_dir" .
 
       - name: Package archive (windows)
         if: matrix.archive_ext == 'zip'
@@ -129,15 +129,15 @@ jobs:
         run: |
           $dist = "dist/${{ matrix.target }}"
           New-Item -ItemType Directory -Force -Path $dist | Out-Null
-          Copy-Item "target/${{ matrix.target }}/release/${{ matrix.bin }}" "$dist\\hash.exe"
+          Copy-Item "target/${{ matrix.target }}/release/${{ matrix.bin }}" "$dist\\hashbytes.exe"
           Copy-Item README.md $dist
-          Compress-Archive -Path "$dist\\*" -DestinationPath "hash-${{ steps.version.outputs.version }}-${{ matrix.target }}.zip" -Force
+          Compress-Archive -Path "$dist\\*" -DestinationPath "hashbytes-${{ steps.version.outputs.version }}-${{ matrix.target }}.zip" -Force
 
       - name: Upload archive
         uses: actions/upload-artifact@v4
         with:
-          name: hash-${{ steps.version.outputs.version }}-${{ matrix.target }}
-          path: hash-${{ steps.version.outputs.version }}-${{ matrix.target }}.${{ matrix.archive_ext }}
+          name: hashbytes-${{ steps.version.outputs.version }}-${{ matrix.target }}
+          path: hashbytes-${{ steps.version.outputs.version }}-${{ matrix.target }}.${{ matrix.archive_ext }}
           if-no-files-found: error
           retention-days: 7
 
@@ -196,7 +196,7 @@ jobs:
       - name: Generate SHA256SUMS
         run: |
           cd dist
-          find . -maxdepth 1 -type f \( -name "hash-*.tar.gz" -o -name "hash-*.zip" \) -print0 \
+          find . -maxdepth 1 -type f \( -name "hashbytes-*.tar.gz" -o -name "hashbytes-*.zip" \) -print0 \
             | sort -z \
             | xargs -0 sha256sum \
             | sed 's|  \./|  |' > SHA256SUMS
@@ -280,8 +280,8 @@ jobs:
           tag_name: ${{ steps.version.outputs.version }}
           name: ${{ steps.version.outputs.version }}
           files: |
-            dist/hash-*.tar.gz
-            dist/hash-*.zip
+            dist/hashbytes-*.tar.gz
+            dist/hashbytes-*.zip
             dist/SHA256SUMS
             dist/SHA256SUMS.sig
             dist/SHA256SUMS.pem
@@ -338,7 +338,7 @@ jobs:
           blocks = []
           current_os = None
           for target, (os_block, arch_block) in targets.items():
-              asset = f"hash-{version}-{target}.tar.gz"
+              asset = f"hashbytes-{version}-{target}.tar.gz"
               if asset not in sums:
                   raise SystemExit(f"missing checksum for {asset} in SHA256SUMS")
               sha = sums[asset]
@@ -356,7 +356,7 @@ jobs:
           formula = f'''# typed: false
           # frozen_string_literal: true
 
-          class CmdrvlHash < Formula
+          class Hashbytes < Formula
             desc "Streaming content hashing for JSONL manifest records"
             homepage "https://github.com/cmdrvl/hash"
             version "{bare}"
@@ -364,16 +364,16 @@ jobs:
           {"".join(chr(10) + l for l in blocks)}
 
             def install
-              bin.install "hash"
+              bin.install "hashbytes"
             end
 
             test do
-              assert_match version.to_s, shell_output("#{{bin}}/hash --version")
+              assert_match version.to_s, shell_output("#{{bin}}/hashbytes --version")
             end
           end
           '''
 
-          pathlib.Path("hash.rb").write_text(textwrap.dedent(formula).lstrip())
+          pathlib.Path("hashbytes.rb").write_text(textwrap.dedent(formula).lstrip())
           PYEOF
 
       - name: Push formula to tap
@@ -385,14 +385,14 @@ jobs:
             exit 0
           fi
           git clone "https://x-access-token:${GH_TOKEN}@github.com/cmdrvl/homebrew-tap.git" tap
-          cp hash.rb tap/Formula/hash.rb
+          cp hashbytes.rb tap/Formula/hashbytes.rb
           cd tap
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           if git diff --quiet; then
             echo "No changes to formula"
           else
-            git add Formula/hash.rb
-            git commit -m "hash ${{ steps.version.outputs.version }}"
+            git add Formula/hashbytes.rb
+            git commit -m "hashbytes ${{ steps.version.outputs.version }}"
             git push
           fi

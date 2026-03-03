@@ -1,4 +1,4 @@
-use hash::refusal::{RefusalCode, RefusalEnvelope};
+use hashbytes::refusal::{RefusalCode, RefusalEnvelope};
 use serde_json::json;
 
 #[test]

@@ -65,7 +65,7 @@ fn progress_flag_emits_structured_progress_and_warning_events_on_stderr() {
         ],
     );
 
-    let output = Command::new(env!("CARGO_BIN_EXE_hash"))
+    let output = Command::new(env!("CARGO_BIN_EXE_hashbytes"))
         .arg("--progress")
         .arg("--no-witness")
         .arg(&manifest_path)

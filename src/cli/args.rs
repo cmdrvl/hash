@@ -2,7 +2,7 @@ use clap::{Parser, Subcommand};
 use std::path::PathBuf;
 
 #[derive(Parser)]
-#[command(name = "hash")]
+#[command(name = "hashbytes")]
 #[command(about = "Streaming content hashing for manifest enrichment")]
 #[command(version)]
 pub struct Cli {

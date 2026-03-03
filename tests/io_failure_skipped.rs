@@ -1,4 +1,4 @@
-use hash::pipeline::enricher::process_io_failed_record;
+use hashbytes::pipeline::enricher::process_io_failed_record;
 use serde_json::{Value, json};
 
 #[test]

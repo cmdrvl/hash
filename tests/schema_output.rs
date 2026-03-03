@@ -9,7 +9,7 @@ fn schema_flag_emits_canonical_schema_artifact() {
     let expected_value: Value =
         serde_json::from_str(&expected_schema).expect("schema artifact must be valid JSON");
 
-    let output = Command::new(env!("CARGO_BIN_EXE_hash"))
+    let output = Command::new(env!("CARGO_BIN_EXE_hashbytes"))
         .arg("--schema")
         .output()
         .expect("hash binary should run");

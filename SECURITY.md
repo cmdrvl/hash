@@ -47,12 +47,12 @@ To verify a release:
 
 ```bash
 # Download the binary and checksum
-curl -L -o hash-v0.1.0-x86_64-unknown-linux-gnu.tar.gz \
-  https://github.com/cmdrvl/hash/releases/download/v0.1.0/hash-v0.1.0-x86_64-unknown-linux-gnu.tar.gz
+curl -L -o hashbytes-v0.1.0-x86_64-unknown-linux-gnu.tar.gz \
+  https://github.com/cmdrvl/hash/releases/download/v0.1.0/hashbytes-v0.1.0-x86_64-unknown-linux-gnu.tar.gz
 
-curl -L -o hash-v0.1.0-x86_64-unknown-linux-gnu.tar.gz.sha256 \
-  https://github.com/cmdrvl/hash/releases/download/v0.1.0/hash-v0.1.0-x86_64-unknown-linux-gnu.tar.gz.sha256
+curl -L -o hashbytes-v0.1.0-x86_64-unknown-linux-gnu.tar.gz.sha256 \
+  https://github.com/cmdrvl/hash/releases/download/v0.1.0/hashbytes-v0.1.0-x86_64-unknown-linux-gnu.tar.gz.sha256
 
 # Verify checksum
-sha256sum -c hash-v0.1.0-x86_64-unknown-linux-gnu.tar.gz.sha256
+sha256sum -c hashbytes-v0.1.0-x86_64-unknown-linux-gnu.tar.gz.sha256
 ```

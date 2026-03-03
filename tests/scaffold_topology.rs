@@ -1,10 +1,10 @@
-use hash::cli::{Algorithm, Outcome, exit_code};
-use hash::output::jsonl::write_json_line;
-use hash::pipeline::parallel::OrderedResults;
-use hash::pipeline::reader::parse_json_line;
-use hash::refusal::{RefusalCode, RefusalEnvelope};
-use hash::witness::query::{WitnessQuery, filter_records};
-use hash::witness::record::WitnessRecord;
+use hashbytes::cli::{Algorithm, Outcome, exit_code};
+use hashbytes::output::jsonl::write_json_line;
+use hashbytes::pipeline::parallel::OrderedResults;
+use hashbytes::pipeline::reader::parse_json_line;
+use hashbytes::refusal::{RefusalCode, RefusalEnvelope};
+use hashbytes::witness::query::{WitnessQuery, filter_records};
+use hashbytes::witness::record::WitnessRecord;
 use serde_json::json;
 use std::str::FromStr;
 

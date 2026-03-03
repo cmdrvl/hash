@@ -31,7 +31,7 @@ fn write_jsonl(path: &Path, records: &[Value]) {
 }
 
 fn run_hash(manifest_path: &Path, witness_path: &Path) -> Output {
-    Command::new(env!("CARGO_BIN_EXE_hash"))
+    Command::new(env!("CARGO_BIN_EXE_hashbytes"))
         .arg("--no-witness")
         .arg(manifest_path)
         .env("EPISTEMIC_WITNESS", witness_path)

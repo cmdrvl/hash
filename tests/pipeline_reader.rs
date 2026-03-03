@@ -1,4 +1,4 @@
-use hash::pipeline::reader::parse_json_line;
+use hashbytes::pipeline::reader::parse_json_line;
 use serde_json::json;
 
 #[test]

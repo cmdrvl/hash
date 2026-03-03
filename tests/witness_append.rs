@@ -21,7 +21,7 @@ fn unique_path(suffix: &str) -> PathBuf {
 fn appends_witness_record_by_default() {
     let witness_path = unique_path("default").with_extension("jsonl");
 
-    let output = Command::new(env!("CARGO_BIN_EXE_hash"))
+    let output = Command::new(env!("CARGO_BIN_EXE_hashbytes"))
         .env("EPISTEMIC_WITNESS", &witness_path)
         .output()
         .expect("hash binary should run");
@@ -52,7 +52,7 @@ fn appends_witness_records_across_multiple_runs() {
     let witness_path = unique_path("append-chain").with_extension("jsonl");
 
     for _ in 0..2 {
-        let output = Command::new(env!("CARGO_BIN_EXE_hash"))
+        let output = Command::new(env!("CARGO_BIN_EXE_hashbytes"))
             .env("EPISTEMIC_WITNESS", &witness_path)
             .output()
             .expect("hash binary should run");
@@ -79,7 +79,7 @@ fn appends_witness_records_across_multiple_runs() {
 fn no_witness_flag_skips_append() {
     let witness_path = unique_path("disabled").with_extension("jsonl");
 
-    let output = Command::new(env!("CARGO_BIN_EXE_hash"))
+    let output = Command::new(env!("CARGO_BIN_EXE_hashbytes"))
         .arg("--no-witness")
         .env("EPISTEMIC_WITNESS", &witness_path)
         .output()
@@ -93,7 +93,7 @@ fn witness_append_failure_does_not_change_exit_code() {
     let witness_dir = unique_path("dir-target");
     fs::create_dir_all(&witness_dir).expect("dir target should be created");
 
-    let output = Command::new(env!("CARGO_BIN_EXE_hash"))
+    let output = Command::new(env!("CARGO_BIN_EXE_hashbytes"))
         .env("EPISTEMIC_WITNESS", &witness_dir)
         .output()
         .expect("hash binary should run");

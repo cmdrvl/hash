@@ -1,4 +1,4 @@
-use hash::pipeline::enricher::apply_upstream_skipped_passthrough;
+use hashbytes::pipeline::enricher::apply_upstream_skipped_passthrough;
 use serde_json::{Map, Value, json};
 
 #[test]

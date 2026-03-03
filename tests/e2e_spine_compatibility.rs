@@ -28,7 +28,7 @@ fn write_jsonl(path: &Path, records: &[Value]) {
 }
 
 fn run_hash_on_manifest(manifest_path: &Path) -> Output {
-    Command::new(env!("CARGO_BIN_EXE_hash"))
+    Command::new(env!("CARGO_BIN_EXE_hashbytes"))
         .arg("--no-witness")
         .arg(manifest_path.to_str().expect("manifest path utf8"))
         .output()

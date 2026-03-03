@@ -1,4 +1,4 @@
-use hash::pipeline::parallel::{normalized_jobs, process_indexed_in_parallel};
+use hashbytes::pipeline::parallel::{normalized_jobs, process_indexed_in_parallel};
 use std::time::Duration;
 
 #[test]

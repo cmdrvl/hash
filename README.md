@@ -9,7 +9,7 @@
 **Prove what's inside every file — byte-level identity for every artifact in a manifest.**
 
 ```bash
-brew install cmdrvl/tap/hash
+brew install cmdrvl/tap/hashbytes
 ```
 
 </div>
@@ -32,7 +32,7 @@ You have a manifest of files. You know they exist. But if someone asks "has this
 ## Quick Example
 
 ```bash
-$ vacuum /data/dec | hash
+$ vacuum /data/dec | hashbytes
 ```
 
 ```jsonl
@@ -44,16 +44,16 @@ Two files hashed — SHA-256 by default, tool versions accumulated, ready for `f
 
 ```bash
 # Use BLAKE3 for faster hashing:
-$ vacuum /data/dec | hash --algorithm blake3
+$ vacuum /data/dec | hashbytes --algorithm blake3
 
 # Sequential processing (deterministic debugging):
-$ vacuum /data/dec | hash --jobs 1
+$ vacuum /data/dec | hashbytes --jobs 1
 
 # Full pipeline into lockfile:
-$ vacuum /data/dec | hash | lock --dataset-id "dec" > dec.lock.json
+$ vacuum /data/dec | hashbytes | lock --dataset-id "dec" > dec.lock.json
 
 # With fingerprinting:
-$ vacuum /data/models | hash | fingerprint --fp argus-model.v1 \
+$ vacuum /data/models | hashbytes | fingerprint --fp argus-model.v1 \
     | lock --dataset-id "models" > models.lock.json
 ```
 
@@ -98,7 +98,7 @@ Each tool reads JSONL from stdin and emits enriched JSONL to stdout. `hash` rece
 Every input record was successfully hashed. No skipped records in the output.
 
 ```bash
-$ vacuum /data/dec | hash
+$ vacuum /data/dec | hashbytes
 # exit 0 — all files hashed
 ```
 
@@ -107,7 +107,7 @@ $ vacuum /data/dec | hash
 At least one record has `_skipped: true` — either passed through from upstream or newly skipped because `hash` couldn't read the file. Remaining records are hashed normally. The output is valid but incomplete.
 
 ```bash
-$ vacuum /data/dec | hash
+$ vacuum /data/dec | hashbytes
 # exit 1 — some files couldn't be hashed
 # check: jq 'select(._skipped == true)' to see which
 ```
@@ -157,7 +157,7 @@ Input stream is invalid — not valid JSONL, missing required fields, or I/O err
 ### Homebrew (Recommended)
 
 ```bash
-brew install cmdrvl/tap/hash
+brew install cmdrvl/tap/hashbytes
 ```
 
 ### Shell Script
@@ -170,7 +170,7 @@ curl -fsSL https://raw.githubusercontent.com/cmdrvl/hash/main/scripts/install.sh
 
 ```bash
 cargo build --release
-./target/release/hash --help
+./target/release/hashbytes --help
 ```
 
 ---
@@ -178,8 +178,8 @@ cargo build --release
 ## CLI Reference
 
 ```bash
-hash [<INPUT>] [OPTIONS]
-hash witness <query|last|count> [OPTIONS]
+hashbytes [<INPUT>] [OPTIONS]
+hashbytes witness <query|last|count> [OPTIONS]
 ```
 
 ### Arguments
@@ -287,10 +287,10 @@ You're piping something that isn't valid JSONL. Most common cause: piping raw fi
 
 ```bash
 # Wrong:
-echo "/data/tape.csv" | hash
+echo "/data/tape.csv" | hashbytes
 
 # Right:
-vacuum /data | hash
+vacuum /data | hashbytes
 ```
 
 ### Some files show `_skipped: true`
@@ -298,7 +298,7 @@ vacuum /data | hash
 hash couldn't read the file (permission denied, file deleted between vacuum and hash). Check the `_warnings` array:
 
 ```bash
-vacuum /data | hash | jq 'select(._skipped == true) | {path, _warnings}'
+vacuum /data | hashbytes | jq 'select(._skipped == true) | {path, _warnings}'
 ```
 
 ### Different hashes with `--jobs 1` vs `--jobs 4`
@@ -367,14 +367,14 @@ For the full toolchain guide, see the [Agent Operator Guide](https://github.com/
 ### Self-describing contract
 
 ```bash
-$ hash --describe | jq '.exit_codes'
+$ hashbytes --describe | jq '.exit_codes'
 {
   "0": { "meaning": "ALL_HASHED" },
   "1": { "meaning": "PARTIAL" },
   "2": { "meaning": "REFUSAL" }
 }
 
-$ hash --describe | jq '.pipeline'
+$ hashbytes --describe | jq '.pipeline'
 {
   "upstream": ["vacuum"],
   "downstream": ["fingerprint", "lock", "pack"]
@@ -385,7 +385,7 @@ $ hash --describe | jq '.pipeline'
 
 ```bash
 # 1. Hash all artifacts
-vacuum /data/dec | hash > hashed.jsonl
+vacuum /data/dec | hashbytes > hashed.jsonl
 
 case $? in
   0) echo "all hashed" ;;
@@ -417,25 +417,25 @@ cat hashed.jsonl | lock --dataset-id "dec" > dec.lock.json
 
 ```bash
 # Query by date range or outcome
-hash witness query --tool hash --since 2026-01-01 --outcome ALL_HASHED --json
+hashbytes witness query --tool hash --since 2026-01-01 --outcome ALL_HASHED --json
 
 # Get the most recent run
-hash witness last --json
+hashbytes witness last --json
 
 # Count runs matching a filter
-hash witness count --since 2026-02-01
+hashbytes witness count --since 2026-02-01
 ```
 
 ### Subcommand Reference
 
 ```bash
-hash witness query [--tool <name>] [--since <iso8601>] [--until <iso8601>] \
+hashbytes witness query [--tool <name>] [--since <iso8601>] [--until <iso8601>] \
   [--outcome <ALL_HASHED|PARTIAL|REFUSAL>] [--input-hash <substring>] \
   [--limit <n>] [--json]
 
-hash witness last [--json]
+hashbytes witness last [--json]
 
-hash witness count [--tool <name>] [--since <iso8601>] [--until <iso8601>] \
+hashbytes witness count [--tool <name>] [--since <iso8601>] [--until <iso8601>] \
   [--outcome <ALL_HASHED|PARTIAL|REFUSAL>] [--input-hash <substring>] [--json]
 ```
 

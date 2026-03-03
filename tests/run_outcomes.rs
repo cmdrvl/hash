@@ -1,5 +1,5 @@
-use hash::cli::{Cli, Command, WitnessAction};
-use hash::run_with_cli;
+use hashbytes::cli::{Cli, Command, WitnessAction};
+use hashbytes::run_with_cli;
 use serde_json::{Value, json};
 use std::fs;
 use std::io::Write;
@@ -46,7 +46,7 @@ fn write_jsonl(path: &Path, records: &[Value]) {
 }
 
 fn run_hash_with_witness(witness_path: &Path, args: &[&str]) -> Output {
-    ProcessCommand::new(env!("CARGO_BIN_EXE_hash"))
+    ProcessCommand::new(env!("CARGO_BIN_EXE_hashbytes"))
         .env("EPISTEMIC_WITNESS", witness_path)
         .args(args)
         .output()
