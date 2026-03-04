@@ -1,6 +1,6 @@
 [package]
 name = "hashbytes"
-version = "0.2.0"
+version = "0.3.0"
 edition = "2024"
 description = "Streaming content hashing — adds SHA-256 or BLAKE3 byte identity to every artifact in a manifest"
 repository = "https://github.com/cmdrvl/hash"
