@@ -149,6 +149,77 @@ fn binary_all_hashed_returns_exit_zero_and_hash_fields() {
 }
 
 #[test]
+fn binary_parallel_jobs_match_sequential_output_bytes() {
+    let manifest_path = unique_path("jobs-parity-manifest");
+    let witness_path = unique_path("jobs-parity-witness");
+    let mut data_paths = Vec::new();
+    let mut records = Vec::new();
+
+    for (index, size) in [16_usize, 512, 8_192, 2_048, 64].into_iter().enumerate() {
+        let data_path = unique_path(&format!("jobs-parity-data-{index}"));
+        let payload = vec![b'a' + u8::try_from(index).expect("index fits into u8"); size];
+        fs::write(&data_path, payload).expect("write fixture file");
+        records.push(json!({
+            "version": "vacuum.v0",
+            "path": data_path.to_string_lossy(),
+            "relative_path": format!("artifact-{index}.bin")
+        }));
+        data_paths.push(data_path);
+    }
+
+    write_jsonl(&manifest_path, &records);
+
+    let sequential = run_hash_with_witness(
+        &witness_path,
+        &[
+            "--no-witness",
+            "--jobs",
+            "1",
+            manifest_path.to_str().expect("manifest path utf8"),
+        ],
+    );
+    let parallel = run_hash_with_witness(
+        &witness_path,
+        &[
+            "--no-witness",
+            "--jobs",
+            "4",
+            manifest_path.to_str().expect("manifest path utf8"),
+        ],
+    );
+
+    assert_eq!(sequential.status.code(), Some(0));
+    assert_eq!(parallel.status.code(), Some(0));
+    assert_eq!(parallel.stdout, sequential.stdout);
+
+    let rows = parse_jsonl(&parallel.stdout);
+    let relative_paths: Vec<_> = rows
+        .iter()
+        .map(|row| {
+            row["relative_path"]
+                .as_str()
+                .expect("relative_path should be string")
+        })
+        .collect();
+    assert_eq!(
+        relative_paths,
+        vec![
+            "artifact-0.bin",
+            "artifact-1.bin",
+            "artifact-2.bin",
+            "artifact-3.bin",
+            "artifact-4.bin"
+        ]
+    );
+
+    for data_path in data_paths {
+        let _ = fs::remove_file(data_path);
+    }
+    let _ = fs::remove_file(manifest_path);
+    let _ = fs::remove_file(witness_path);
+}
+
+#[test]
 fn binary_partial_returns_exit_one_for_unreadable_paths() {
     let missing_path = unique_path("missing-data");
     let manifest_path = unique_path("partial-manifest");

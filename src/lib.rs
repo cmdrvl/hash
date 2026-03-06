@@ -34,6 +34,27 @@ struct StreamOutcome {
     output_hash: String,
 }
 
+struct PendingRecord {
+    line_number: usize,
+    record: Value,
+}
+
+struct ProcessedRecord {
+    record: Value,
+    warning_event: Option<progress::WarningEvent>,
+    skipped: bool,
+}
+
+struct StreamState<'a> {
+    progress_enabled: bool,
+    stdout: &'a mut std::io::Stdout,
+    stderr: &'a mut std::io::Stderr,
+    output_hasher: &'a mut blake3::Hasher,
+    processed: &'a mut usize,
+    any_skipped: &'a mut bool,
+    progress_started_at: std::time::Instant,
+}
+
 /// Main entry point that handles all errors internally and returns exit code
 pub fn run() -> u8 {
     run_with_cli(cli::Cli::parse())
@@ -113,8 +134,10 @@ fn handle_main_workflow(cli: &cli::Cli) -> RunResult {
         None => Box::new(std::io::BufReader::new(std::io::stdin())),
     };
 
+    let jobs = pipeline::parallel::normalized_jobs(cli.jobs);
+
     // Process JSONL stream
-    match process_jsonl_stream(input_reader, algorithm, cli.progress) {
+    match process_jsonl_stream(input_reader, algorithm, jobs, cli.progress) {
         Ok(stream_outcome) => RunResult::new(stream_outcome.outcome, stream_outcome.output_hash),
         Err(refusal_envelope) => refusal_result(*refusal_envelope),
     }
@@ -123,10 +146,10 @@ fn handle_main_workflow(cli: &cli::Cli) -> RunResult {
 fn process_jsonl_stream(
     mut reader: Box<dyn std::io::BufRead>,
     algorithm: cli::Algorithm,
+    jobs: usize,
     progress_enabled: bool,
 ) -> Result<StreamOutcome, Box<refusal::RefusalEnvelope>> {
     use std::io::BufRead;
-    use std::io::Write;
 
     let mut line_number = 0;
     let mut buffer = String::new();
@@ -135,7 +158,17 @@ fn process_jsonl_stream(
     let mut stdout = std::io::stdout();
     let mut stderr = std::io::stderr();
     let mut output_hasher = blake3::Hasher::new();
-    let progress_started_at = std::time::Instant::now();
+    let batch_size = stream_batch_size(jobs);
+    let mut pending_records = Vec::with_capacity(batch_size);
+    let mut stream_state = StreamState {
+        progress_enabled,
+        stdout: &mut stdout,
+        stderr: &mut stderr,
+        output_hasher: &mut output_hasher,
+        processed: &mut processed,
+        any_skipped: &mut any_skipped,
+        progress_started_at: std::time::Instant::now(),
+    };
 
     loop {
         buffer.clear();
@@ -157,78 +190,22 @@ fn process_jsonl_stream(
 
         // Parse JSONL line
         let parsed_line = pipeline::reader::parse_json_line(&buffer, line_number)?;
-        let mut record = parsed_line.record;
+        pending_records.push(PendingRecord {
+            line_number: parsed_line.line_number,
+            record: parsed_line.record,
+        });
 
-        // Process record: check if already skipped or needs hashing
-        if let Some(record_obj) = record.as_object() {
-            if pipeline::enricher::is_skipped(record_obj) {
-                // Pass through upstream skipped records
-                record = pipeline::enricher::process_skipped_record(record);
-                any_skipped = true;
-            } else {
-                // Extract path for hashing
-                let path_str = record
-                    .get("path")
-                    .and_then(|v| v.as_str())
-                    .ok_or_else(|| {
-                        Box::new(refusal::RefusalEnvelope::bad_input_missing_field(
-                            line_number,
-                            "path",
-                        ))
-                    })?
-                    .to_owned();
-
-                let path = std::path::Path::new(&path_str);
-
-                // Attempt to hash the file
-                match hash::hash_file(path, algorithm) {
-                    Ok(file_hash) => {
-                        // Successfully hashed - process as normal record
-                        record = pipeline::enricher::process_hashed_record(
-                            record,
-                            file_hash,
-                            algorithm.prefix(),
-                        );
-                    }
-                    Err(io_err) => {
-                        let warning_message = format!("skipped: {io_err}");
-                        if progress_enabled {
-                            let warning_event =
-                                progress::WarningEvent::new(&path_str, &warning_message);
-                            let _ = progress::write_warning(&mut stderr, &warning_event);
-                        } else {
-                            eprintln!("hash: warning: {path_str}: {warning_message}");
-                        }
-
-                        // IO failure - mark as skipped with warning
-                        record = pipeline::enricher::process_io_failed_record(
-                            record,
-                            &path_str,
-                            &io_err.to_string(),
-                        );
-                        any_skipped = true;
-                    }
-                }
-            }
-        }
-
-        // Emit processed record as JSONL
-        let mut rendered = Vec::new();
-        output::jsonl::write_json_line(&mut rendered, &record)
-            .map_err(|err| Box::new(refusal::RefusalEnvelope::io_error(err.to_string())))?;
-        stdout
-            .write_all(&rendered)
-            .map_err(|err| Box::new(refusal::RefusalEnvelope::io_error(err.to_string())))?;
-        output_hasher.update(&rendered);
-
-        processed += 1;
-        if progress_enabled {
-            let elapsed_ms =
-                u64::try_from(progress_started_at.elapsed().as_millis()).unwrap_or(u64::MAX);
-            let progress_event = progress::ProgressEvent::new(processed, processed, elapsed_ms);
-            let _ = progress::write_progress(&mut stderr, &progress_event);
+        if pending_records.len() >= batch_size {
+            flush_pending_records(
+                std::mem::take(&mut pending_records),
+                algorithm,
+                jobs,
+                &mut stream_state,
+            )?;
         }
     }
+
+    flush_pending_records(pending_records, algorithm, jobs, &mut stream_state)?;
 
     // Determine final outcome based on whether any records were skipped
     let outcome = if any_skipped {
@@ -282,7 +259,10 @@ fn witness_params(cli: &cli::Cli) -> Map<String, Value> {
     let mut params = Map::new();
     params.insert("algorithm".to_owned(), Value::String(cli.algorithm.clone()));
     if let Some(jobs) = cli.jobs {
-        params.insert("jobs".to_owned(), Value::from(jobs));
+        params.insert(
+            "jobs".to_owned(),
+            Value::from(pipeline::parallel::normalized_jobs(Some(jobs))),
+        );
     }
     params
 }
@@ -297,4 +277,145 @@ fn outcome_label(outcome: cli::Outcome) -> &'static str {
 
 fn hash_bytes(bytes: &[u8]) -> String {
     format!("blake3:{}", blake3::hash(bytes).to_hex())
+}
+
+fn stream_batch_size(jobs: usize) -> usize {
+    jobs.max(1).saturating_mul(32)
+}
+
+fn flush_pending_records(
+    pending_records: Vec<PendingRecord>,
+    algorithm: cli::Algorithm,
+    jobs: usize,
+    stream_state: &mut StreamState<'_>,
+) -> Result<(), Box<refusal::RefusalEnvelope>> {
+    use std::io::Write;
+
+    if pending_records.is_empty() {
+        return Ok(());
+    }
+
+    // Keep memory bounded while still honoring deterministic ordered output.
+    let processed_records =
+        pipeline::parallel::process_indexed_in_parallel(pending_records, jobs, |(_, pending)| {
+            process_record(pending, algorithm)
+        });
+
+    for processed_record in processed_records {
+        let processed_record = processed_record?;
+
+        if let Some(warning_event) = processed_record.warning_event.as_ref() {
+            if stream_state.progress_enabled {
+                let _ = progress::write_warning(stream_state.stderr, warning_event);
+            } else {
+                let _ = writeln!(
+                    stream_state.stderr,
+                    "hash: warning: {}: {}",
+                    warning_event.path, warning_event.message
+                );
+            }
+        }
+
+        emit_processed_record(&processed_record.record, stream_state)?;
+
+        if processed_record.skipped {
+            *stream_state.any_skipped = true;
+        }
+    }
+
+    Ok(())
+}
+
+fn process_record(
+    pending: PendingRecord,
+    algorithm: cli::Algorithm,
+) -> Result<ProcessedRecord, Box<refusal::RefusalEnvelope>> {
+    let PendingRecord {
+        line_number,
+        record,
+    } = pending;
+
+    let Some(record_obj) = record.as_object() else {
+        return Err(Box::new(refusal::RefusalEnvelope::from_code(
+            refusal::RefusalCode::BadInput,
+            serde_json::json!({
+                "line": line_number,
+                "error": "record must be a JSON object"
+            }),
+        )));
+    };
+
+    if pipeline::enricher::is_skipped(record_obj) {
+        return Ok(ProcessedRecord {
+            record: pipeline::enricher::process_skipped_record(record),
+            warning_event: None,
+            skipped: true,
+        });
+    }
+
+    let path_str = record
+        .get("path")
+        .and_then(|value| value.as_str())
+        .ok_or_else(|| {
+            Box::new(refusal::RefusalEnvelope::bad_input_missing_field(
+                line_number,
+                "path",
+            ))
+        })?
+        .to_owned();
+
+    match hash::hash_file(std::path::Path::new(&path_str), algorithm) {
+        Ok(file_hash) => Ok(ProcessedRecord {
+            record: pipeline::enricher::process_hashed_record(
+                record,
+                file_hash,
+                algorithm.prefix(),
+            ),
+            warning_event: None,
+            skipped: false,
+        }),
+        Err(io_err) => {
+            let warning_message = format!("skipped: {io_err}");
+
+            Ok(ProcessedRecord {
+                record: pipeline::enricher::process_io_failed_record(
+                    record,
+                    &path_str,
+                    &io_err.to_string(),
+                ),
+                warning_event: Some(progress::WarningEvent::new(&path_str, &warning_message)),
+                skipped: true,
+            })
+        }
+    }
+}
+
+fn emit_processed_record(
+    record: &Value,
+    stream_state: &mut StreamState<'_>,
+) -> Result<(), Box<refusal::RefusalEnvelope>> {
+    use std::io::Write;
+
+    let mut rendered = Vec::new();
+    output::jsonl::write_json_line(&mut rendered, record)
+        .map_err(|err| Box::new(refusal::RefusalEnvelope::io_error(err.to_string())))?;
+    stream_state
+        .stdout
+        .write_all(&rendered)
+        .map_err(|err| Box::new(refusal::RefusalEnvelope::io_error(err.to_string())))?;
+    stream_state.output_hasher.update(&rendered);
+
+    *stream_state.processed += 1;
+    if stream_state.progress_enabled {
+        let elapsed_ms = u64::try_from(stream_state.progress_started_at.elapsed().as_millis())
+            .unwrap_or(u64::MAX);
+        let progress_event = progress::ProgressEvent::new(
+            *stream_state.processed,
+            *stream_state.processed,
+            elapsed_ms,
+        );
+        let _ = progress::write_progress(stream_state.stderr, &progress_event);
+    }
+
+    Ok(())
 }

@@ -96,6 +96,25 @@ fn no_witness_keeps_existing_ledger_unchanged() {
 }
 
 #[test]
+fn witness_records_normalized_jobs_value() {
+    let witness_path = unique_path("normalized-jobs");
+
+    let output = run_hash_with_witness(&witness_path, &["--jobs", "0"]);
+    assert_eq!(output.status.code(), Some(0));
+
+    let contents = fs::read_to_string(&witness_path).expect("witness file should exist");
+    let last_row = contents
+        .lines()
+        .last()
+        .expect("witness file should contain one record");
+    let parsed: Value = serde_json::from_str(last_row).expect("valid witness json");
+    assert_eq!(parsed["tool"], "hash");
+    assert_eq!(parsed["params"]["jobs"], 1);
+
+    let _ = fs::remove_file(witness_path);
+}
+
+#[test]
 fn query_skips_malformed_lines_and_applies_filters() {
     let witness_path = unique_path("query-malformed");
     let good_match = witness_line(
