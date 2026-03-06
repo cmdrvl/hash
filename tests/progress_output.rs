@@ -113,3 +113,52 @@ fn progress_flag_emits_structured_progress_and_warning_events_on_stderr() {
     let _ = fs::remove_file(manifest_path);
     let _ = fs::remove_file(witness_path);
 }
+
+#[test]
+fn progress_flag_keeps_witness_append_failures_structured() {
+    let existing_path = unique_path("witness-existing");
+    let manifest_path = unique_path("witness-manifest").with_extension("jsonl");
+    let blocker_path = unique_path("witness-blocker");
+    let witness_path = blocker_path.join("witness.jsonl");
+
+    fs::write(&existing_path, b"progress witness fixture").expect("write fixture");
+    fs::write(&blocker_path, b"not a directory").expect("write blocker");
+
+    write_jsonl(
+        &manifest_path,
+        &[json!({
+            "version": "vacuum.v0",
+            "path": existing_path.to_string_lossy().to_string(),
+            "tool_versions": {"vacuum": "0.1.0"}
+        })],
+    );
+
+    let output = Command::new(env!("CARGO_BIN_EXE_hashbytes"))
+        .arg("--progress")
+        .arg(&manifest_path)
+        .env("EPISTEMIC_WITNESS", &witness_path)
+        .output()
+        .expect("hash binary should run");
+
+    assert_eq!(output.status.code(), Some(0));
+
+    let stdout_rows = parse_jsonl(&output.stdout);
+    assert_eq!(stdout_rows.len(), 1);
+    assert_eq!(stdout_rows[0]["version"], "hash.v0");
+
+    let stderr_rows = parse_jsonl(&output.stderr);
+    assert!(
+        stderr_rows.iter().any(|row| {
+            row["type"] == "warning"
+                && row["path"] == witness_path.to_string_lossy().to_string()
+                && row["message"]
+                    .as_str()
+                    .is_some_and(|message| message.contains("witness append failed"))
+        }),
+        "witness append failures should stay structured in progress mode"
+    );
+
+    let _ = fs::remove_file(existing_path);
+    let _ = fs::remove_file(manifest_path);
+    let _ = fs::remove_file(blocker_path);
+}

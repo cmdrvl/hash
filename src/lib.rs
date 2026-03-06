@@ -257,6 +257,7 @@ fn append_witness_non_fatal(cli: &cli::Cli, result: &RunResult) {
         return;
     }
 
+    let witness_path = witness::default_witness_path();
     let record = witness::WitnessRecord::from_run(
         outcome_label(result.outcome),
         result.exit_code(),
@@ -264,8 +265,16 @@ fn append_witness_non_fatal(cli: &cli::Cli, result: &RunResult) {
         result.output_hash.clone(),
     );
 
-    if let Err(err) = witness::append_default_record(&record) {
-        eprintln!("hash: warning: witness append failed: {err}");
+    if let Err(err) = witness::append_record(&witness_path, &record) {
+        if cli.progress {
+            let warning_event = progress::WarningEvent::new(
+                &witness_path.to_string_lossy(),
+                &format!("witness append failed: {err}"),
+            );
+            let _ = progress::write_warning(&mut std::io::stderr(), &warning_event);
+        } else {
+            eprintln!("hash: warning: witness append failed: {err}");
+        }
     }
 }
 
