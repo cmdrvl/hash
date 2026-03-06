@@ -36,12 +36,24 @@ fn write_witness_lines(path: &Path, lines: &[&str]) {
     }
 }
 
-fn witness_line(tool: &str, outcome: &str, exit_code: u8, output_hash: &str, ts: &str) -> String {
+fn witness_line(
+    tool: &str,
+    outcome: &str,
+    exit_code: u8,
+    output_hash: &str,
+    input_hash: Option<&str>,
+    ts: &str,
+) -> String {
     serde_json::to_string(&json!({
         "version": "witness.v0",
         "tool": tool,
         "outcome": outcome,
         "exit_code": exit_code,
+        "inputs": [{
+            "path": "stdin",
+            "hash": input_hash,
+            "bytes": null
+        }],
         "output_hash": output_hash,
         "ts": ts,
         "params": {}
@@ -83,7 +95,14 @@ fn default_runs_append_multiple_records_to_same_ledger() {
 #[test]
 fn no_witness_keeps_existing_ledger_unchanged() {
     let witness_path = unique_path("no-witness-existing");
-    let seed = witness_line("hash", "PARTIAL", 1, "blake3:seed", "2026-01-01T00:00:00Z");
+    let seed = witness_line(
+        "hash",
+        "PARTIAL",
+        1,
+        "blake3:seed",
+        Some("blake3:input-seed"),
+        "2026-01-01T00:00:00Z",
+    );
     write_witness_lines(&witness_path, &[&seed]);
 
     let output = run_hash_with_witness(&witness_path, &["--no-witness"]);
@@ -121,7 +140,8 @@ fn query_skips_malformed_lines_and_applies_filters() {
         "hash",
         "PARTIAL",
         1,
-        "blake3:match-123",
+        "blake3:result-123",
+        Some("blake3:input-match-123"),
         "2026-01-03T12:00:00Z",
     );
     let good_non_match = witness_line(
@@ -129,6 +149,7 @@ fn query_skips_malformed_lines_and_applies_filters() {
         "REFUSAL",
         2,
         "blake3:other-456",
+        Some("blake3:input-other-456"),
         "2026-01-04T12:00:00Z",
     );
     write_witness_lines(&witness_path, &["{bad-json", &good_match, &good_non_match]);
@@ -143,7 +164,7 @@ fn query_skips_malformed_lines_and_applies_filters() {
             "--outcome",
             "PARTIAL",
             "--input-hash",
-            "match",
+            "input-match",
             "--json",
         ],
     );
@@ -154,7 +175,7 @@ fn query_skips_malformed_lines_and_applies_filters() {
     assert_eq!(rows.len(), 1);
     assert_eq!(rows[0]["tool"], "hash");
     assert_eq!(rows[0]["outcome"], "PARTIAL");
-    assert_eq!(rows[0]["output_hash"], "blake3:match-123");
+    assert_eq!(rows[0]["output_hash"], "blake3:result-123");
 
     let _ = fs::remove_file(witness_path);
 }
@@ -167,9 +188,17 @@ fn last_returns_most_recent_record_when_ledger_has_entries() {
         "ALL_HASHED",
         0,
         "blake3:older",
+        Some("blake3:input-older"),
         "2026-01-01T00:00:00Z",
     );
-    let newer = witness_line("lock", "REFUSAL", 2, "blake3:newer", "2026-01-02T00:00:00Z");
+    let newer = witness_line(
+        "lock",
+        "REFUSAL",
+        2,
+        "blake3:newer",
+        Some("blake3:input-newer"),
+        "2026-01-02T00:00:00Z",
+    );
     write_witness_lines(&witness_path, &[&older, &newer]);
 
     let output = run_hash_with_witness(&witness_path, &["witness", "last", "--json"]);

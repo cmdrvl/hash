@@ -59,13 +59,12 @@ pub fn filter_records<'a>(
         })
         .filter(|record| within_bounds(record, since_bound.as_ref(), until_bound.as_ref()))
         .filter(|record| match &query.input_hash {
-            Some(hash_filter) => {
-                if let Some(ref output_hash) = record.output_hash {
-                    output_hash.contains(hash_filter)
-                } else {
-                    false
-                }
-            }
+            Some(hash_filter) => record.inputs.iter().any(|input| {
+                input
+                    .hash
+                    .as_deref()
+                    .is_some_and(|hash| hash.contains(hash_filter))
+            }),
             None => true,
         })
         .collect();

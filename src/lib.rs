@@ -235,7 +235,24 @@ fn append_witness_non_fatal(cli: &cli::Cli, result: &RunResult) {
     }
 
     let witness_path = witness::default_witness_path();
+    let inputs = match witness_inputs(cli) {
+        Ok(inputs) => inputs,
+        Err(err) => {
+            let input_label = cli
+                .input
+                .as_ref()
+                .map(|path| path.to_string_lossy().into_owned())
+                .unwrap_or_else(|| "stdin".to_owned());
+            emit_witness_warning(
+                cli,
+                &input_label,
+                &format!("witness input metadata failed: {err}"),
+            );
+            return;
+        }
+    };
     let record = witness::WitnessRecord::from_run(
+        inputs,
         outcome_label(result.outcome),
         result.exit_code(),
         witness_params(cli),
@@ -243,15 +260,11 @@ fn append_witness_non_fatal(cli: &cli::Cli, result: &RunResult) {
     );
 
     if let Err(err) = witness::append_record(&witness_path, &record) {
-        if cli.progress {
-            let warning_event = progress::WarningEvent::new(
-                &witness_path.to_string_lossy(),
-                &format!("witness append failed: {err}"),
-            );
-            let _ = progress::write_warning(&mut std::io::stderr(), &warning_event);
-        } else {
-            eprintln!("hash: warning: witness append failed: {err}");
-        }
+        emit_witness_warning(
+            cli,
+            &witness_path.to_string_lossy(),
+            &format!("witness append failed: {err}"),
+        );
     }
 }
 
@@ -265,6 +278,29 @@ fn witness_params(cli: &cli::Cli) -> Map<String, Value> {
         );
     }
     params
+}
+
+fn witness_inputs(cli: &cli::Cli) -> Result<Vec<witness::record::WitnessInput>, std::io::Error> {
+    match &cli.input {
+        Some(path) => {
+            let bytes = std::fs::read(path)?;
+            Ok(vec![witness::WitnessRecord::input(
+                path.to_string_lossy().into_owned(),
+                Some(hash_bytes(&bytes)),
+                Some(bytes.len() as u64),
+            )])
+        }
+        None => Ok(vec![witness::WitnessRecord::input("stdin", None, None)]),
+    }
+}
+
+fn emit_witness_warning(cli: &cli::Cli, path: &str, message: &str) {
+    if cli.progress {
+        let warning_event = progress::WarningEvent::new(path, message);
+        let _ = progress::write_warning(&mut std::io::stderr(), &warning_event);
+    } else {
+        eprintln!("hash: warning: {message}");
+    }
 }
 
 fn outcome_label(outcome: cli::Outcome) -> &'static str {

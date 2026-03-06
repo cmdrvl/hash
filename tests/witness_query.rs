@@ -45,6 +45,7 @@ fn sample_records() -> Vec<Value> {
             "tool": "hash",
             "outcome": "ALL_HASHED",
             "exit_code": 0,
+            "inputs": [{ "path": "stdin", "hash": "blake3:input-aaa111", "bytes": null }],
             "output_hash": "blake3:aaa111",
             "ts": "2026-01-01T12:00:00Z",
             "params": {}
@@ -54,6 +55,7 @@ fn sample_records() -> Vec<Value> {
             "tool": "lock",
             "outcome": "REFUSAL",
             "exit_code": 2,
+            "inputs": [{ "path": "stdin", "hash": "blake3:input-bbb222", "bytes": null }],
             "output_hash": "blake3:bbb222",
             "ts": "2026-01-02T12:00:00Z",
             "params": {}
@@ -63,7 +65,8 @@ fn sample_records() -> Vec<Value> {
             "tool": "hash",
             "outcome": "PARTIAL",
             "exit_code": 1,
-            "output_hash": "blake3:ccc333",
+            "inputs": [{ "path": "stdin", "hash": "blake3:input-match-333", "bytes": null }],
+            "output_hash": "blake3:result-333",
             "ts": "2026-01-03T12:00:00Z",
             "params": {}
         }),
@@ -85,7 +88,7 @@ fn query_applies_tool_outcome_hash_and_limit_filters() {
             "--outcome",
             "PARTIAL",
             "--input-hash",
-            "ccc",
+            "match",
             "--limit",
             "1",
             "--json",
@@ -156,7 +159,7 @@ fn last_returns_most_recent_record_and_exit_zero_when_ledger_has_rows() {
     let parsed: Value = serde_json::from_str(&stdout).expect("last json output");
     assert_eq!(parsed["tool"], "hash");
     assert_eq!(parsed["outcome"], "PARTIAL");
-    assert_eq!(parsed["output_hash"], "blake3:ccc333");
+    assert_eq!(parsed["output_hash"], "blake3:result-333");
 
     let _ = fs::remove_file(witness_path);
 }
