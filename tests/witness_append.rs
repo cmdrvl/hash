@@ -34,13 +34,24 @@ fn appends_witness_record_by_default() {
         .expect("witness file should contain one line");
     let witness: Value = serde_json::from_str(line).expect("witness line should be valid json");
 
-    assert_eq!(witness["version"], "witness.v0");
+    assert!(
+        witness["id"]
+            .as_str()
+            .is_some_and(|value| value.starts_with("blake3:"))
+    );
+    assert_eq!(witness["version"], env!("CARGO_PKG_VERSION"));
     assert_eq!(witness["tool"], "hash");
+    assert!(
+        witness["binary_hash"]
+            .as_str()
+            .is_some_and(|value| value.starts_with("blake3:"))
+    );
     assert_eq!(witness["outcome"], "ALL_HASHED");
     assert_eq!(witness["exit_code"], 0);
     assert_eq!(witness["inputs"][0]["path"], "stdin");
     assert!(witness["inputs"][0]["hash"].is_null());
     assert!(witness["inputs"][0]["bytes"].is_null());
+    assert!(witness["prev"].is_null());
     assert!(
         witness["output_hash"]
             .as_str()
@@ -82,6 +93,7 @@ fn file_input_witness_records_manifest_hash_and_size() {
         witness["inputs"][0]["path"],
         manifest_path.to_string_lossy().as_ref()
     );
+    assert_eq!(witness["version"], env!("CARGO_PKG_VERSION"));
     assert_eq!(
         witness["inputs"][0]["bytes"],
         serde_json::json!(manifest_bytes.len())
@@ -117,11 +129,13 @@ fn appends_witness_records_across_multiple_runs() {
         .collect();
     assert_eq!(lines.len(), 2);
 
-    for line in lines {
-        let witness: Value = serde_json::from_str(line).expect("witness line should be valid json");
-        assert_eq!(witness["version"], "witness.v0");
-        assert_eq!(witness["tool"], "hash");
-    }
+    let first: Value = serde_json::from_str(lines[0]).expect("first witness line should parse");
+    let second: Value = serde_json::from_str(lines[1]).expect("second witness line should parse");
+    assert_eq!(first["version"], env!("CARGO_PKG_VERSION"));
+    assert_eq!(first["tool"], "hash");
+    assert!(first["prev"].is_null());
+    assert_eq!(second["tool"], "hash");
+    assert_eq!(second["prev"], first["id"]);
 
     let _ = fs::remove_file(witness_path);
 }

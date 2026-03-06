@@ -257,7 +257,10 @@ fn append_witness_non_fatal(cli: &cli::Cli, result: &RunResult) {
         result.exit_code(),
         witness_params(cli),
         result.output_hash.clone(),
+        witness::ledger::last_record_id(&witness_path),
     );
+    let mut record = record;
+    record.compute_id();
 
     if let Err(err) = witness::append_record(&witness_path, &record) {
         emit_witness_warning(

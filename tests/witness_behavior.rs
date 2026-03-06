@@ -45,8 +45,10 @@ fn witness_line(
     ts: &str,
 ) -> String {
     serde_json::to_string(&json!({
-        "version": "witness.v0",
+        "id": format!("blake3:{tool}-{outcome}-{ts}"),
         "tool": tool,
+        "version": "0.0.0-test",
+        "binary_hash": "blake3:test-binary",
         "outcome": outcome,
         "exit_code": exit_code,
         "inputs": [{
@@ -54,9 +56,10 @@ fn witness_line(
             "hash": input_hash,
             "bytes": null
         }],
+        "params": {},
         "output_hash": output_hash,
+        "prev": null,
         "ts": ts,
-        "params": {}
     }))
     .expect("serialize witness line")
 }
@@ -77,13 +80,21 @@ fn default_runs_append_multiple_records_to_same_ledger() {
         .map(|line| serde_json::from_str(line).expect("valid witness json"))
         .collect();
     assert_eq!(rows.len(), 2);
+    assert_eq!(rows[0]["version"], env!("CARGO_PKG_VERSION"));
+    assert_eq!(rows[0]["tool"], "hash");
+    assert!(rows[0]["prev"].is_null());
+    assert_eq!(rows[1]["tool"], "hash");
+    assert_eq!(rows[1]["prev"], rows[0]["id"]);
     for row in rows {
-        assert_eq!(row["version"], "witness.v0");
-        assert_eq!(row["tool"], "hash");
         assert_eq!(row["outcome"], "ALL_HASHED");
         assert_eq!(row["exit_code"], 0);
         assert!(
             row["output_hash"]
+                .as_str()
+                .is_some_and(|value| value.starts_with("blake3:"))
+        );
+        assert!(
+            row["binary_hash"]
                 .as_str()
                 .is_some_and(|value| value.starts_with("blake3:"))
         );

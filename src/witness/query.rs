@@ -95,10 +95,7 @@ fn within_bounds(
         return true;
     }
 
-    let Some(ts_raw) = record.ts.as_deref() else {
-        return false;
-    };
-    let Some(record_ts) = parse_time_bound(ts_raw) else {
+    let Some(record_ts) = parse_time_bound(&record.ts) else {
         return false;
     };
 

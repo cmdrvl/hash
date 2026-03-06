@@ -1,3 +1,4 @@
+use chrono::{SecondsFormat, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 
@@ -12,15 +13,21 @@ pub struct WitnessInput {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct WitnessRecord {
-    pub version: String,
+    #[serde(default)]
+    pub id: String,
     pub tool: String,
-    pub outcome: String,
-    pub exit_code: u8,
+    pub version: String,
+    #[serde(default)]
+    pub binary_hash: String,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub inputs: Vec<WitnessInput>,
-    pub output_hash: Option<String>,
-    pub ts: Option<String>,
     pub params: Map<String, Value>,
+    pub outcome: String,
+    pub exit_code: u8,
+    pub output_hash: String,
+    #[serde(default)]
+    pub prev: Option<String>,
+    pub ts: String,
 }
 
 impl WitnessRecord {
@@ -36,31 +43,63 @@ impl WitnessRecord {
         }
     }
 
-    pub fn new(tool: impl Into<String>, outcome: impl Into<String>, exit_code: u8) -> Self {
-        Self {
-            version: "witness.v0".to_owned(),
-            tool: tool.into(),
-            outcome: outcome.into(),
-            exit_code,
-            inputs: Vec::new(),
-            output_hash: None,
-            ts: None,
-            params: Map::new(),
-        }
-    }
-
     pub fn from_run(
         inputs: Vec<WitnessInput>,
         outcome: impl Into<String>,
         exit_code: u8,
         params: Map<String, Value>,
         output_hash: String,
+        prev: Option<String>,
     ) -> Self {
-        let mut record = Self::new("hash", outcome, exit_code);
-        record.inputs = inputs;
-        record.params = params;
-        record.output_hash = Some(output_hash);
-        record.ts = Some(chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Secs, true));
-        record
+        Self {
+            id: String::new(),
+            tool: "hash".to_owned(),
+            version: env!("CARGO_PKG_VERSION").to_owned(),
+            binary_hash: hash_self()
+                .map(|value| format!("blake3:{value}"))
+                .unwrap_or_default(),
+            inputs,
+            params,
+            outcome: outcome.into(),
+            exit_code,
+            output_hash,
+            prev,
+            ts: Utc::now().to_rfc3339_opts(SecondsFormat::Secs, true),
+        }
     }
+
+    pub fn new(tool: impl Into<String>, outcome: impl Into<String>, exit_code: u8) -> Self {
+        Self {
+            id: String::new(),
+            tool: tool.into(),
+            version: env!("CARGO_PKG_VERSION").to_owned(),
+            binary_hash: String::new(),
+            inputs: Vec::new(),
+            params: Map::new(),
+            outcome: outcome.into(),
+            exit_code,
+            output_hash: String::new(),
+            prev: None,
+            ts: Utc::now().to_rfc3339_opts(SecondsFormat::Secs, true),
+        }
+    }
+
+    pub fn compute_id(&mut self) {
+        self.id.clear();
+        self.id = format!(
+            "blake3:{}",
+            blake3::hash(canonical_json(self).as_bytes()).to_hex()
+        );
+    }
+}
+
+pub fn canonical_json(record: &WitnessRecord) -> String {
+    let value = serde_json::to_value(record).expect("WitnessRecord should serialize");
+    serde_json::to_string(&value).expect("WitnessRecord JSON should encode")
+}
+
+fn hash_self() -> Result<String, std::io::Error> {
+    let path = std::env::current_exe()?;
+    let bytes = std::fs::read(path)?;
+    Ok(blake3::hash(&bytes).to_hex().to_string())
 }
