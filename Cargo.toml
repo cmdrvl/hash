@@ -23,6 +23,7 @@ rayon = "1.8"
 [dev-dependencies]
 assert_cmd = "2.0"
 predicates = "3.0"
+spine-rules = { git = "https://github.com/cmdrvl/spine-rules" }
 
 [profile.release]
 opt-level = "z"
