@@ -325,7 +325,7 @@ jobs:
 
       - name: Generate formula
         run: |
-          python3 - <<'PYEOF'
+          python3 -c '
           import pathlib
           import textwrap
 
@@ -354,23 +354,23 @@ jobs:
               if os_block != current_os:
                   if current_os is not None:
                       blocks.append("  end")
-                  blocks.append(f"\n  {os_block} do")
+                  blocks.append(f"  {os_block} do")
                   current_os = os_block
               blocks.append(f"    {arch_block} do")
-              blocks.append(f'      url "https://github.com/cmdrvl/hash/releases/download/{version}/{asset}"')
-              blocks.append(f'      sha256 "{sha}"')
+              blocks.append(f"      url \"https://github.com/cmdrvl/hash/releases/download/{version}/{asset}\"")
+              blocks.append(f"      sha256 \"{sha}\"")
               blocks.append("    end")
           blocks.append("  end")
 
-          formula = f'''# typed: false
+          formula = f"""# typed: false
           # frozen_string_literal: true
 
-          class Hashbytes < Formula
+          class CmdrvlHash < Formula
             desc "Streaming content hashing for JSONL manifest records"
             homepage "https://github.com/cmdrvl/hash"
             version "{bare}"
             license "MIT"
-          {"".join(chr(10) + l for l in blocks)}
+          {"".join(chr(10) + line for line in blocks)}
 
             def install
               bin.install "hashbytes"
@@ -380,10 +380,10 @@ jobs:
               assert_match version.to_s, shell_output("#{{bin}}/hashbytes --version")
             end
           end
-          '''
+          """
 
-          pathlib.Path("hashbytes.rb").write_text(textwrap.dedent(formula).lstrip())
-          PYEOF
+          pathlib.Path("cmdrvl-hash.rb").write_text(textwrap.dedent(formula).lstrip())
+          '
 
       - name: Push formula to tap
         env:
@@ -394,14 +394,15 @@ jobs:
             exit 0
           fi
           git clone "https://x-access-token:${GH_TOKEN}@github.com/cmdrvl/homebrew-tap.git" tap
-          cp hashbytes.rb tap/Formula/hashbytes.rb
+          cp cmdrvl-hash.rb tap/Formula/cmdrvl-hash.rb
           cd tap
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          if git diff --quiet; then
+          git add Formula/cmdrvl-hash.rb
+          if git diff --cached --quiet; then
             echo "No changes to formula"
           else
-            git add Formula/hashbytes.rb
-            git commit -m "hashbytes ${{ steps.version.outputs.version }}"
-            git push
+            git commit -m "cmdrvl-hash ${{ steps.version.outputs.version }}"
+            git push origin HEAD:main
+            git push origin HEAD:master
           fi
