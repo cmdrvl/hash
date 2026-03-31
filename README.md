@@ -20,6 +20,8 @@ You have a manifest of files. You know they exist. But if someone asks "has this
 
 **hash reads each file through a 64 KB streaming buffer and adds its cryptographic identity — SHA-256 or BLAKE3 — to every record in the manifest.** Parallel by default, constant memory, deterministic output order regardless of how many workers are running. Same files in, same hashes out.
 
+The repo/tool identity is `hash`, but the executable is `hashbytes`. Use `hashbytes` in shell commands; protocol identifiers such as `hash.v0` and `tool_versions.hash` stay unchanged.
+
 ### What makes this different
 
 - **Constant memory** — 64 KB buffer per worker. A 100 GB file uses the same RAM as a 1 KB file.
@@ -61,7 +63,7 @@ $ vacuum /data/models | hashbytes | fingerprint --fp argus-model.v1 \
 
 ## Where hash Fits
 
-`hash` is the **second tool** in the stream pipeline — it establishes byte identity.
+`hash` is the repo/tool name, and `hashbytes` is the executable you invoke. It is the **second tool** in the stream pipeline — it establishes byte identity.
 
 ```
 vacuum  →  hash  →  fingerprint  →  lock  →  pack
@@ -196,7 +198,7 @@ hashbytes witness <query|last|count> [OPTIONS]
 | `--describe` | flag | `false` | Print compiled `operator.json` to stdout, exit `0` |
 | `--schema` | flag | `false` | Print JSON Schema to stdout, exit `0` |
 | `--progress` | flag | `false` | Emit structured progress JSONL to stderr |
-| `--version` | flag | `false` | Print `hash <semver>` to stdout, exit `0` |
+| `--version` | flag | `false` | Print `hashbytes <semver>` to stdout, exit `0` |
 
 ### Exit Codes
 

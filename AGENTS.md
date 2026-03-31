@@ -8,6 +8,8 @@
 
 `hash` computes byte identity for manifest records by adding deterministic cryptographic content hashes (`bytes_hash`) to each record in a JSONL stream.
 
+Repo/tool identity remains `hash`; shell invocation uses `hashbytes`.
+
 Pipeline position:
 
 ```

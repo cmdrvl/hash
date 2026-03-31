@@ -22,6 +22,8 @@ You have a manifest of files (from `vacuum`). Before you can fingerprint, lock, 
 
 `hash` replaces that with **a single streaming enrichment step** that adds content-addressed identity to every manifest record.
 
+The repo/tool identity is `hash`; the executable name is `hashbytes` so shell invocation does not collide with generic command names. Protocol identifiers such as `hash.v0` remain unchanged.
+
 ---
 
 ## Non-goals (explicit)
