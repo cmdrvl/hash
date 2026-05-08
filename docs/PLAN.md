@@ -67,6 +67,10 @@ vacuum /data/2025-12/ | hashbytes | lock --dataset-id "raw-dec" > raw.lock.json
 ```bash
 hashbytes [<INPUT>] [OPTIONS]
 hashbytes witness <query|last|count> [OPTIONS]
+hashbytes doctor health [--json]
+hashbytes doctor capabilities --json
+hashbytes doctor robot-docs
+hashbytes doctor --robot-triage
 ```
 
 ### Arguments
@@ -82,6 +86,21 @@ hashbytes witness <query|last|count> [OPTIONS]
 - `--schema`: Print the JSON Schema for the JSONL record to stdout and exit 0. Like `--describe`, checked before input is validated.
 - `--progress`: Emit structured progress JSONL to stderr (see Progress reporting).
 - `--version`: Print `hashbytes <semver>` to stdout and exit 0.
+
+### Doctor subcommands
+
+`hashbytes doctor` is a read-only diagnostic surface for agents and release
+automation. Doctor commands exit before input opening and before witness append,
+so they must not consume stdin, read manifests, hash artifact bytes, create
+witness directories, append witness records, or use the network.
+
+- `health [--json]`: validate compiled operator, schema, algorithm, stream, and witness contracts.
+- `capabilities --json`: report side-effect promises and unavailable fix mode.
+- `robot-docs`: print concise agent-facing usage notes.
+- `--robot-triage`: emit one machine-readable health and triage payload.
+
+`doctor --fix` is intentionally unavailable until detector, backup, inverse, and
+fixture coverage exists for hash-specific repairs.
 
 ### Exit codes
 
@@ -327,24 +346,25 @@ For hash, `inputs` describes the JSONL source: `"stdin"` when piped, or the file
 
 ```
  1. Parse CLI args (clap)               → exit 2 on bad args; --version handled by clap
- 2. If witness subcommand: dispatch to witness query/last/count, exit
- 3. If --describe: print operator.json to stdout, exit 0
- 4. If --schema: print JSON Schema to stdout, exit 0
- 5. Open input (file or stdin)
- 6. For each JSONL line:
+ 2. If doctor subcommand: dispatch read-only diagnostics, exit before input/witness
+ 3. If witness subcommand: dispatch to witness query/last/count, exit
+ 4. If --describe: print operator.json to stdout, exit 0
+ 5. If --schema: print JSON Schema to stdout, exit 0
+ 6. Open input (file or stdin)
+ 7. For each JSONL line:
     a. Parse as JSON                     → E_BAD_INPUT if not valid JSON (STOP)
     b. Extract required fields (path)    → E_BAD_INPUT if missing (STOP)
-    → On refusal (steps 6a/6b): emit refusal envelope to stdout, append
+    → On refusal (steps 7a/7b): emit refusal envelope to stdout, append
       witness record with outcome "REFUSAL" (if not --no-witness), exit 2
     c. If _skipped: true, pass through   → update version + tool_versions only
     d. Read file at `path`               → if fail: mark _skipped, append _warning, continue
     e. Hash file bytes (streaming)       → set bytes_hash, hash_algorithm
     f. Update version, merge tool_versions
     g. Serialize and emit to stdout
- 7. Track: any _skipped records? → exit 1 if yes, exit 0 if all clean
- 8. Append witness record (if not --no-witness); output_hash is
+ 8. Track: any _skipped records? → exit 1 if yes, exit 0 if all clean
+ 9. Append witness record (if not --no-witness); output_hash is
     BLAKE3 of the full JSONL output (per spine witness protocol)
- 9. Exit
+10. Exit
 ```
 
 ### Streaming hash computation
@@ -638,6 +658,7 @@ Provide test fixtures in `tests/fixtures/`:
 - `hashbytes witness <query|last|count>` subcommands
 - `--version` flag
 - `operator.json` + `--describe`
+- Read-only `hashbytes doctor` health/capabilities/robot-docs/triage surface
 - Exit codes 0/1/2
 - Refusal system with `E_BAD_INPUT`, `E_IO`
 

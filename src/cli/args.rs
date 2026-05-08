@@ -44,6 +44,37 @@ pub enum Command {
         #[command(subcommand)]
         action: WitnessAction,
     },
+    /// Inspect hashbytes health and agent-facing capabilities
+    Doctor {
+        /// Emit one machine-readable triage report
+        #[arg(long)]
+        robot_triage: bool,
+
+        /// Emit JSON for the default health report
+        #[arg(long)]
+        json: bool,
+
+        #[command(subcommand)]
+        action: Option<DoctorAction>,
+    },
+}
+
+#[derive(Subcommand)]
+pub enum DoctorAction {
+    /// Check the compiled binary contract without reading input data
+    Health {
+        /// Emit JSON
+        #[arg(long)]
+        json: bool,
+    },
+    /// Describe read-only doctor capabilities
+    Capabilities {
+        /// Emit JSON
+        #[arg(long)]
+        json: bool,
+    },
+    /// Print agent-facing doctor usage notes
+    RobotDocs,
 }
 
 #[derive(Subcommand)]

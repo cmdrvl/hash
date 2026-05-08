@@ -1,7 +1,7 @@
 {
   "schema_version": "operator.v0",
   "name": "hashbytes",
-  "version": "0.3.2",
+  "version": "0.4.0",
   "description": "Computes exact byte identity (SHA-256 or BLAKE3) for artifacts in a manifest",
   "repository": "https://github.com/cmdrvl/hash",
   "license": "MIT",
@@ -34,6 +34,50 @@
       "flag": "--jobs",
       "type": "integer",
       "description": "Number of parallel workers (default: CPU count)"
+    }
+  ],
+  "subcommands": [
+    {
+      "name": "doctor",
+      "description": "Read-only health checks and agent-facing diagnostics",
+      "read_only": true,
+      "commands": [
+        {
+          "name": "health",
+          "usage": "hashbytes doctor health [--json]",
+          "description": "Validate compiled operator, schema, algorithm, stream, and witness contracts without reading input data"
+        },
+        {
+          "name": "capabilities",
+          "usage": "hashbytes doctor capabilities --json",
+          "description": "Return read-only doctor capabilities and explicit side-effect promises"
+        },
+        {
+          "name": "robot-docs",
+          "usage": "hashbytes doctor robot-docs",
+          "description": "Print concise agent-facing doctor usage notes"
+        },
+        {
+          "name": "robot-triage",
+          "usage": "hashbytes doctor --robot-triage",
+          "description": "Return one machine-readable health and triage report"
+        }
+      ],
+      "fix_mode": {
+        "available": false,
+        "reason": "Repair mode is deferred until hash-specific detector, backup, inverse, and fixture coverage exists"
+      },
+      "side_effects": {
+        "reads_stdin": false,
+        "reads_input_manifest": false,
+        "reads_artifact_bytes": false,
+        "hashes_files": false,
+        "opens_witness_ledger": false,
+        "appends_witness_ledger": false,
+        "creates_witness_directory": false,
+        "writes_doctor_artifacts": false,
+        "uses_network": false
+      }
     }
   ],
   "exit_codes": {

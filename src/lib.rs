@@ -4,6 +4,7 @@ use clap::Parser;
 use serde_json::{Map, Value};
 
 pub mod cli;
+pub mod doctor;
 pub mod hash;
 pub mod output;
 pub mod pipeline;
@@ -61,6 +62,17 @@ pub fn run() -> u8 {
 }
 
 pub fn run_with_cli(cli: cli::Cli) -> u8 {
+    // Doctor commands are intentionally read-only and must return before the
+    // stream hashing workflow can read input or append witness records.
+    if let Some(cli::Command::Doctor {
+        action,
+        robot_triage,
+        json,
+    }) = &cli.command
+    {
+        return doctor::handle_command(action.as_ref(), *robot_triage, *json);
+    }
+
     // Handle immediate flags that don't require input processing
     if cli.describe {
         print_operator_json();
@@ -221,7 +233,17 @@ fn process_jsonl_stream(
 }
 
 fn refusal_result(refusal: refusal::RefusalEnvelope) -> RunResult {
-    let rendered = serde_json::to_string(&refusal).unwrap();
+    let rendered = serde_json::to_string(&refusal).unwrap_or_else(|err| {
+        serde_json::json!({
+            "code": "E_INTERNAL",
+            "message": "Failed to render refusal envelope",
+            "detail": {
+                "error": err.to_string()
+            },
+            "next_command": null
+        })
+        .to_string()
+    });
     println!("{rendered}");
     RunResult::new(
         cli::Outcome::Refusal,

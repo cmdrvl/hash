@@ -182,6 +182,10 @@ cargo build --release
 ```bash
 hashbytes [<INPUT>] [OPTIONS]
 hashbytes witness <query|last|count> [OPTIONS]
+hashbytes doctor health [--json]
+hashbytes doctor capabilities --json
+hashbytes doctor robot-docs
+hashbytes doctor --robot-triage
 ```
 
 ### Arguments
@@ -199,6 +203,24 @@ hashbytes witness <query|last|count> [OPTIONS]
 | `--schema` | flag | `false` | Print JSON Schema to stdout, exit `0` |
 | `--progress` | flag | `false` | Emit structured progress JSONL to stderr |
 | `--version` | flag | `false` | Print `hashbytes <semver>` to stdout, exit `0` |
+
+### Doctor
+
+`hashbytes doctor` is a read-only diagnostic surface for agents and release
+automation. It returns before the hashing workflow, so it does not read stdin,
+open input manifests, hash artifact bytes, create witness directories, or append
+witness records.
+
+```bash
+hashbytes doctor health --json
+hashbytes doctor capabilities --json
+hashbytes doctor robot-docs
+hashbytes doctor --robot-triage
+```
+
+`doctor --fix` is intentionally unavailable in this release. Repair mode is
+deferred until hash-specific detector, backup, inverse, and fixture coverage
+exists.
 
 ### Exit Codes
 
@@ -381,6 +403,12 @@ $ hashbytes --describe | jq '.pipeline'
   "upstream": ["vacuum"],
   "downstream": ["fingerprint", "lock", "pack"]
 }
+
+$ hashbytes doctor capabilities --json | jq '.doctor.fix_mode'
+{
+  "available": false,
+  "fixers": []
+}
 ```
 
 ### Agent workflow
@@ -408,6 +436,7 @@ cat hashed.jsonl | lock --dataset-id "dec" > dec.lock.json
 - **Structured JSONL only** — stdout is always machine-readable
 - **`--describe`** — prints `operator.json` so an agent discovers the tool without reading docs
 - **`--schema`** — prints the record JSON schema for programmatic validation
+- **`doctor`** — reports binary health, capabilities, and triage data without touching input data
 - **Deterministic** — same input always produces the same output, enabling reliable caching
 
 ---
