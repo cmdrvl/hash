@@ -1,5 +1,9 @@
 # hash
 
+![hash: byte-level identity. A painterly dashboard showing a survey manifest from vacuum being passed through a precise SHA-256 kernel, producing a complete hash manifest with hex identifiers per file. A yesterday/today comparison panel shows four files with identical hashes (cyan checks) and one file (portfolio_2024Q4.xlsx) with a different hash today (red X) and a byte change detected callout. A WHAT HASH WILL NOT DO panel mirrors vacuum's read-only stance. An evidence-tag printer on the desk has just printed an adhesive label with a content-addressed hash.](docs/images/hash.webp)
+
+> *If the bytes change, the name changes. If not, not.*
+
 <div align="center">
 
 [![CI](https://github.com/cmdrvl/hash/actions/workflows/ci.yml/badge.svg)](https://github.com/cmdrvl/hash/actions/workflows/ci.yml)
@@ -497,3 +501,7 @@ cargo fmt --check
 cargo clippy --all-targets -- -D warnings
 cargo test
 ```
+
+---
+
+*`hash` is part of the open-source toolchain from the [CMD+RVL](https://cmdrvl.com) lineage and AI enablement practice. MIT-licensed. Contributions welcome from any practice or stack.*
