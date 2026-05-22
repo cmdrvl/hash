@@ -4,8 +4,10 @@ use serde_json::{Value, json};
 use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
-use std::process::{Command as ProcessCommand, Output};
+use std::process::Output;
 use std::time::{SystemTime, UNIX_EPOCH};
+
+mod support;
 
 fn base_cli() -> Cli {
     Cli {
@@ -46,7 +48,8 @@ fn write_jsonl(path: &Path, records: &[Value]) {
 }
 
 fn run_hash_with_witness(witness_path: &Path, args: &[&str]) -> Output {
-    ProcessCommand::new(env!("CARGO_BIN_EXE_hashbytes"))
+    let mut command = support::hashbytes_command("run-outcomes");
+    command
         .env("EPISTEMIC_WITNESS", witness_path)
         .args(args)
         .output()
@@ -98,14 +101,20 @@ fn witness_subcommands_route_to_witness_handler_exit_codes() {
 
 #[test]
 fn invalid_algorithm_returns_refusal_exit_code() {
-    let mut cli = base_cli();
-    cli.algorithm = "md5".to_string();
-    assert_eq!(run_with_cli(cli), 2);
+    let witness_path = unique_path("invalid-algorithm-witness");
+    let output = run_hash_with_witness(&witness_path, &["--no-witness", "--algorithm", "md5"]);
+    assert_eq!(output.status.code(), Some(2));
+
+    let refusal: Value = serde_json::from_slice(&output.stdout).expect("refusal envelope json");
+    assert_eq!(refusal["refusal"]["code"], "E_BAD_INPUT");
 }
 
 #[test]
 fn default_main_path_returns_all_hashed_exit_code() {
-    assert_eq!(run_with_cli(base_cli()), 0);
+    let witness_path = unique_path("default-main-witness");
+    let output = run_hash_with_witness(&witness_path, &["--no-witness"]);
+    assert_eq!(output.status.code(), Some(0));
+    assert!(output.stdout.is_empty());
 }
 
 #[test]

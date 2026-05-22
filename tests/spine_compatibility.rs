@@ -2,8 +2,10 @@ use serde_json::{Value, json};
 use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
-use std::process::{Command, Output};
+use std::process::Output;
 use std::time::{SystemTime, UNIX_EPOCH};
+
+mod support;
 
 fn unique_path(suffix: &str) -> PathBuf {
     let mut path = std::env::temp_dir();
@@ -30,7 +32,8 @@ fn write_jsonl(path: &Path, records: &[Value]) {
 }
 
 fn run_hash_with_manifest(manifest: &Path, witness: &Path) -> Output {
-    Command::new(env!("CARGO_BIN_EXE_hashbytes"))
+    let mut command = support::hashbytes_command("spine-compat");
+    command
         .arg("--no-witness")
         .arg(manifest)
         .env("EPISTEMIC_WITNESS", witness)

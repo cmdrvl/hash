@@ -2,8 +2,9 @@ use serde_json::{Value, json};
 use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
-use std::process::Command;
 use std::time::{SystemTime, UNIX_EPOCH};
+
+mod support;
 
 fn unique_path(suffix: &str) -> PathBuf {
     let mut path = std::env::temp_dir();
@@ -65,7 +66,7 @@ fn progress_flag_emits_structured_progress_and_warning_events_on_stderr() {
         ],
     );
 
-    let output = Command::new(env!("CARGO_BIN_EXE_hashbytes"))
+    let output = support::hashbytes_command("progress-output")
         .arg("--progress")
         .arg("--no-witness")
         .arg(&manifest_path)
@@ -133,7 +134,7 @@ fn progress_flag_keeps_witness_append_failures_structured() {
         })],
     );
 
-    let output = Command::new(env!("CARGO_BIN_EXE_hashbytes"))
+    let output = support::hashbytes_command("progress-witness")
         .arg("--progress")
         .arg(&manifest_path)
         .env("EPISTEMIC_WITNESS", &witness_path)

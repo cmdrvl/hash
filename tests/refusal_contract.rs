@@ -4,10 +4,15 @@ use serde_json::json;
 #[test]
 fn refusal_codes_map_to_contract_values() {
     assert_eq!(RefusalCode::BadInput.as_str(), "E_BAD_INPUT");
+    assert_eq!(RefusalCode::GuardPreflight.as_str(), "E_GUARD_PREFLIGHT");
     assert_eq!(RefusalCode::Io.as_str(), "E_IO");
     assert_eq!(
         RefusalCode::BadInput.default_message(),
         "Input is not valid JSONL or missing required fields"
+    );
+    assert_eq!(
+        RefusalCode::GuardPreflight.default_message(),
+        "Required Claude PreToolUse guard hooks are missing or unhealthy"
     );
     assert_eq!(
         RefusalCode::Io.default_message(),
