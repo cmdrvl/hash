@@ -121,7 +121,8 @@ Same protocol as `vacuum`, `rvl`, and `shape`:
 - Default: every hash run (success or refusal) appends exactly one `witness.v0` record.
 - `outcome` in the witness record: `"ALL_HASHED"` (exit 0), `"PARTIAL"` (exit 1), or `"REFUSAL"` (exit 2).
 - Opt-out: `--no-witness`.
-- Path: `EPISTEMIC_WITNESS` env var → `~/.epistemic/witness.jsonl`.
+- Path: `EPISTEMIC_WITNESS` explicit override → `~/.cmdrvl/state/witness/witness.jsonl`.
+- Migration: when no override is set, an existing `~/.epistemic/witness.jsonl` is copied to the canonical ledger and migration/deprecation records are written under `~/.cmdrvl/migrations/` and `~/.cmdrvl/notices/`.
 - Witness failures never change the domain exit code.
 
 Witness query subcommands (same shape as rvl/shape/vacuum):
@@ -631,7 +632,7 @@ Provide test fixtures in `tests/fixtures/`:
 - **Stdin/file input:** reads from stdin when no argument, from file when provided
 - **Exit code tests:** 0 for all-clean, 1 for partial, 2 for refusal
 - **Refusal tests:** invalid JSONL input triggers E_BAD_INPUT
-- **Witness tests:** witness record appended, `--no-witness` suppresses
+- **Witness tests:** witness record appended, default ledger uses `~/.cmdrvl/state/witness/witness.jsonl`, legacy `~/.epistemic/witness.jsonl` migrates, `--no-witness` suppresses
 - **`--describe` test:** prints valid operator.json
 - **Large file test:** streaming hash doesn't load entire file into memory (verify via peak RSS)
 

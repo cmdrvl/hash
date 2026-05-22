@@ -100,6 +100,8 @@ cargo fmt --check && cargo clippy --all-targets -- -D warnings && cargo test
 Ambient witness semantics must match spine conventions (`vacuum`/`shape`/`rvl`/`lock` parity):
 - append by default,
 - `--no-witness` opt-out,
+- default ledger under `~/.cmdrvl/state/witness/witness.jsonl`,
+- `EPISTEMIC_WITNESS` remains an explicit operator override,
 - witness failures do not mutate domain outcome semantics,
 - witness query subcommands supported (`query`, `last`, `count`).
 

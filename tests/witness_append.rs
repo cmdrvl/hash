@@ -1,6 +1,6 @@
 use serde_json::Value;
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 mod support;
@@ -18,12 +18,23 @@ fn unique_path(suffix: &str) -> PathBuf {
     path
 }
 
+fn canonical_witness_path(home: &Path) -> PathBuf {
+    home.join(".cmdrvl")
+        .join("state")
+        .join("witness")
+        .join("witness.jsonl")
+}
+
 #[test]
 fn appends_witness_record_by_default() {
-    let witness_path = unique_path("default").with_extension("jsonl");
+    let home = unique_path("default-home");
+    fs::create_dir_all(&home).expect("temporary home should be created");
+    let witness_path = canonical_witness_path(&home);
 
     let output = support::hashbytes_command("witness-append-default")
-        .env("EPISTEMIC_WITNESS", &witness_path)
+        .env("HOME", &home)
+        .env("USERPROFILE", &home)
+        .env_remove("EPISTEMIC_WITNESS")
         .output()
         .expect("hash binary should run");
     assert!(output.status.success());
@@ -58,8 +69,46 @@ fn appends_witness_record_by_default() {
             .as_str()
             .is_some_and(|hash| hash.starts_with("blake3:"))
     );
+}
 
-    let _ = fs::remove_file(witness_path);
+#[test]
+fn legacy_home_witness_is_migrated_before_append() {
+    let home = unique_path("migration-home");
+    let legacy_path = home.join(".epistemic").join("witness.jsonl");
+    fs::create_dir_all(legacy_path.parent().expect("legacy parent"))
+        .expect("legacy parent should be created");
+    fs::write(
+        &legacy_path,
+        "{\"id\":\"legacy-old\",\"version\":\"witness.v0\",\"tool\":\"hash\",\"outcome\":\"OLD\"}\n",
+    )
+    .expect("legacy witness should be written");
+
+    let output = support::hashbytes_command("witness-migration")
+        .env("HOME", &home)
+        .env("USERPROFILE", &home)
+        .env_remove("EPISTEMIC_WITNESS")
+        .output()
+        .expect("hash binary should run");
+    assert!(output.status.success());
+
+    let canonical_path = canonical_witness_path(&home);
+    let contents = fs::read_to_string(&canonical_path).expect("canonical witness should exist");
+    let lines: Vec<Value> = contents
+        .lines()
+        .map(|line| serde_json::from_str(line).expect("witness line should parse"))
+        .collect();
+    assert_eq!(lines.len(), 2);
+    assert_eq!(lines[0]["outcome"], "OLD");
+    assert_eq!(lines[1]["outcome"], "ALL_HASHED");
+    assert_eq!(lines[1]["prev"], "legacy-old");
+
+    let notice = fs::read_to_string(home.join(".cmdrvl/notices/deprecated-paths.jsonl"))
+        .expect("deprecation notice should be written");
+    assert!(notice.contains("legacy_path_migrated"));
+
+    let migration = fs::read_to_string(home.join(".cmdrvl/migrations/applied.jsonl"))
+        .expect("migration record should be written");
+    assert!(migration.contains("copied_legacy_to_canonical"));
 }
 
 #[test]

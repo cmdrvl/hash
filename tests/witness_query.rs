@@ -18,6 +18,13 @@ fn unique_path(suffix: &str) -> PathBuf {
     path
 }
 
+fn canonical_witness_path(home: &Path) -> PathBuf {
+    home.join(".cmdrvl")
+        .join("state")
+        .join("witness")
+        .join("witness.jsonl")
+}
+
 fn write_witness_records(path: &Path, records: &[Value]) {
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent).expect("create witness parent");
@@ -220,4 +227,31 @@ fn count_outputs_json_and_respects_match_exit_codes() {
     );
 
     let _ = fs::remove_file(witness_path);
+}
+
+#[test]
+fn witness_query_migrates_legacy_default_ledger() {
+    let home = unique_path("legacy-query-home");
+    let legacy_path = home.join(".epistemic").join("witness.jsonl");
+    write_witness_records(&legacy_path, &sample_records());
+
+    let output = Command::new(env!("CARGO_BIN_EXE_hashbytes"))
+        .args(["witness", "count", "--tool", "hash", "--json"])
+        .env("HOME", &home)
+        .env("USERPROFILE", &home)
+        .env_remove("EPISTEMIC_WITNESS")
+        .output()
+        .expect("hash binary should run");
+
+    assert_eq!(output.status.code(), Some(0));
+    let stdout = String::from_utf8(output.stdout).expect("stdout utf8");
+    assert_eq!(
+        serde_json::from_str::<Value>(&stdout).expect("count json"),
+        json!({ "count": 2 })
+    );
+    assert!(canonical_witness_path(&home).exists());
+
+    let notice = fs::read_to_string(home.join(".cmdrvl/notices/deprecated-paths.jsonl"))
+        .expect("deprecation notice should be written");
+    assert!(notice.contains("legacy_path_migrated"));
 }

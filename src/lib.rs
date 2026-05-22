@@ -256,7 +256,18 @@ fn append_witness_non_fatal(cli: &cli::Cli, result: &RunResult) {
         return;
     }
 
-    let witness_path = witness::default_witness_path();
+    let witness_path = match witness::ledger::default_witness_path_for_append() {
+        Ok(path) => path,
+        Err(err) => {
+            let path = witness::default_witness_path();
+            emit_witness_warning(
+                cli,
+                &path.to_string_lossy(),
+                &format!("witness migration failed: {err}"),
+            );
+            return;
+        }
+    };
     let inputs = match witness_inputs(cli) {
         Ok(inputs) => inputs,
         Err(err) => {

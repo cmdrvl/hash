@@ -1,4 +1,4 @@
-use super::ledger::default_witness_path;
+use super::ledger::{default_witness_path, ensure_ledger_migrated};
 use super::record::WitnessRecord;
 use chrono::{DateTime, Utc};
 use std::fs;
@@ -15,6 +15,7 @@ pub struct WitnessQuery {
 }
 
 pub fn load_witness_records() -> Result<Vec<WitnessRecord>, std::io::Error> {
+    ensure_ledger_migrated()?;
     let witness_path = default_witness_path();
 
     if !witness_path.exists() {
