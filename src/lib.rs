@@ -5,7 +5,6 @@ use serde_json::{Map, Value};
 
 pub mod cli;
 pub mod doctor;
-pub mod guard;
 pub mod hash;
 pub mod output;
 pub mod pipeline;
@@ -88,10 +87,6 @@ pub fn run_with_cli(cli: cli::Cli) -> u8 {
     // Handle witness subcommands
     if let Some(cli::Command::Witness { action }) = &cli.command {
         return handle_witness_command(action);
-    }
-
-    if let Err(refusal) = guard::enforce_guard_preflight() {
-        return refusal_result(*refusal).exit_code();
     }
 
     // Handle main hashing workflow

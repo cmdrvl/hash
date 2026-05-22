@@ -226,13 +226,6 @@ hashbytes doctor --robot-triage
 deferred until hash-specific detector, backup, inverse, and fixture coverage
 exists.
 
-### Guard Preflight
-
-Hashing commands fail closed unless the active Claude `PreToolUse` settings
-contain healthy `veil` Read/Grep/Bash hooks and a healthy `dcg` Bash hook.
-`hashbytes doctor`, `hashbytes --describe`, `hashbytes --schema`, and witness
-query commands remain available for diagnostics and automation.
-
 ### Exit Codes
 
 | Code | Meaning |
@@ -310,7 +303,6 @@ All upstream fields are passed through. `version` is updated to `"hash.v0"`. `to
 | Code | Trigger | Next Step |
 |------|---------|-----------|
 | `E_BAD_INPUT` | Not valid JSONL or missing required fields | Check upstream output (run `vacuum` first) |
-| `E_GUARD_PREFLIGHT` | Required Claude `PreToolUse` guard hooks are missing or unhealthy | Install or repair `veil` and `dcg` hooks |
 | `E_IO` | Cannot read input/output stream | Check stdin/stdout and filesystem |
 
 ---

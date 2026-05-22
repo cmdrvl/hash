@@ -119,15 +119,10 @@ fn envelope_serializes_to_json_string() {
 #[test]
 fn refusal_codes_have_correct_string_representations() {
     assert_eq!(RefusalCode::BadInput.as_str(), "E_BAD_INPUT");
-    assert_eq!(RefusalCode::GuardPreflight.as_str(), "E_GUARD_PREFLIGHT");
     assert_eq!(RefusalCode::Io.as_str(), "E_IO");
 
     // Test Display trait
     assert_eq!(format!("{}", RefusalCode::BadInput), "E_BAD_INPUT");
-    assert_eq!(
-        format!("{}", RefusalCode::GuardPreflight),
-        "E_GUARD_PREFLIGHT"
-    );
     assert_eq!(format!("{}", RefusalCode::Io), "E_IO");
 }
 
@@ -136,10 +131,6 @@ fn refusal_codes_have_appropriate_default_messages() {
     assert_eq!(
         RefusalCode::BadInput.default_message(),
         "Input is not valid JSONL or missing required fields"
-    );
-    assert_eq!(
-        RefusalCode::GuardPreflight.default_message(),
-        "Required Claude PreToolUse guard hooks are missing or unhealthy"
     );
     assert_eq!(
         RefusalCode::Io.default_message(),
