@@ -12,6 +12,14 @@ pub struct Cli {
     /// JSONL manifest file (default: stdin)
     pub input: Option<PathBuf>,
 
+    /// Accept structured-output intent; hash output is already JSONL
+    #[arg(long)]
+    pub json: bool,
+
+    /// Emit one machine-readable triage report without reading input
+    #[arg(long)]
+    pub robot_triage: bool,
+
     /// Hash algorithm: sha256 or blake3
     #[arg(long, default_value = "sha256")]
     pub algorithm: String,
@@ -39,6 +47,17 @@ pub struct Cli {
 
 #[derive(Subcommand)]
 pub enum Command {
+    /// Describe agent-facing capabilities
+    Capabilities {
+        /// Emit JSON
+        #[arg(long)]
+        json: bool,
+    },
+    /// Print agent-facing usage guidance
+    RobotDocs {
+        #[command(subcommand)]
+        action: Option<RobotDocsAction>,
+    },
     /// Query the witness ledger
     Witness {
         #[command(subcommand)]
@@ -54,9 +73,19 @@ pub enum Command {
         #[arg(long)]
         json: bool,
 
+        /// Repair mode is unavailable; prints safe alternatives
+        #[arg(long, hide = true)]
+        fix: bool,
+
         #[command(subcommand)]
         action: Option<DoctorAction>,
     },
+}
+
+#[derive(Subcommand)]
+pub enum RobotDocsAction {
+    /// Print the agent guide
+    Guide,
 }
 
 #[derive(Subcommand)]

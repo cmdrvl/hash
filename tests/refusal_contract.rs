@@ -29,7 +29,10 @@ fn bad_input_parse_error_shape_is_stable() {
         refusal.refusal.detail,
         json!({"line": 7, "error": "expected value"})
     );
-    assert!(refusal.refusal.next_command.is_none());
+    assert_eq!(
+        refusal.refusal.next_command.as_deref(),
+        Some("vacuum <ROOT> | hashbytes")
+    );
 }
 
 #[test]
@@ -64,7 +67,7 @@ fn to_value_serializes_expected_envelope() {
                 "code": "E_IO",
                 "message": "Cannot read input/output stream",
                 "detail": { "error": "Permission denied" },
-                "next_command": null
+                "next_command": "hashbytes --help"
             }
         })
     );

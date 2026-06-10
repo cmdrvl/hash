@@ -31,13 +31,16 @@ pub fn parse_json_line(line: &str, line_number: usize) -> Result<ParsedLine, Box
 
 fn ensure_required_fields(record: &Value, line_number: usize) -> Result<(), Box<RefusalEnvelope>> {
     let Some(object) = record.as_object() else {
-        return Err(Box::new(RefusalEnvelope::from_code(
-            RefusalCode::BadInput,
-            serde_json::json!({
-                "line": line_number,
-                "error": "record must be a JSON object"
-            }),
-        )));
+        return Err(Box::new(
+            RefusalEnvelope::from_code(
+                RefusalCode::BadInput,
+                serde_json::json!({
+                    "line": line_number,
+                    "error": "record must be a JSON object"
+                }),
+            )
+            .with_next_command("vacuum <ROOT> | hashbytes"),
+        ));
     };
 
     for required_field in ["path", "version"] {

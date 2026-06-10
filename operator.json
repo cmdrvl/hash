@@ -1,7 +1,7 @@
 {
   "schema_version": "operator.v0",
   "name": "hashbytes",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "description": "Computes exact byte identity (SHA-256 or BLAKE3) for artifacts in a manifest",
   "repository": "https://github.com/cmdrvl/hash",
   "license": "MIT",
@@ -10,7 +10,7 @@
     "binary": "hashbytes",
     "output_mode": "stream",
     "output_schema": "hash.v0",
-    "json_flag": null
+    "json_flag": "--json"
   },
   "arguments": [
     {
@@ -22,6 +22,18 @@
     }
   ],
   "options": [
+    {
+      "name": "json",
+      "flag": "--json",
+      "type": "boolean",
+      "description": "Accepted as structured-output intent; normal hash output is already JSONL"
+    },
+    {
+      "name": "robot-triage",
+      "flag": "--robot-triage",
+      "type": "boolean",
+      "description": "Emit one read-only machine-readable health, capability, and recommendation report"
+    },
     {
       "name": "algorithm",
       "flag": "--algorithm",
@@ -37,6 +49,18 @@
     }
   ],
   "subcommands": [
+    {
+      "name": "capabilities",
+      "usage": "hashbytes capabilities --json",
+      "description": "Return machine-readable tool capabilities without reading stdin or appending witness records",
+      "read_only": true
+    },
+    {
+      "name": "robot-docs",
+      "usage": "hashbytes robot-docs guide",
+      "description": "Print concise agent-facing usage notes",
+      "read_only": true
+    },
     {
       "name": "doctor",
       "description": "Read-only health checks and agent-facing diagnostics",
@@ -61,6 +85,11 @@
           "name": "robot-triage",
           "usage": "hashbytes doctor --robot-triage",
           "description": "Return one machine-readable health and triage report"
+        },
+        {
+          "name": "fix",
+          "usage": "hashbytes doctor --fix",
+          "description": "Exit 2 with safe read-only alternatives; repair mode is unavailable"
         }
       ],
       "fix_mode": {
@@ -111,7 +140,13 @@
       "*"
     ],
     "profile_aware": false,
-    "streaming": true
+    "streaming": true,
+    "agent_surfaces": [
+      "hashbytes --robot-triage",
+      "hashbytes capabilities --json",
+      "hashbytes robot-docs guide",
+      "hashbytes --json"
+    ]
   },
   "pipeline": {
     "upstream": [

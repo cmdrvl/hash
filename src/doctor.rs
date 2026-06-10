@@ -11,7 +11,12 @@ pub fn handle_command(
     action: Option<&cli::DoctorAction>,
     robot_triage: bool,
     json_output: bool,
+    fix: bool,
 ) -> u8 {
+    if fix {
+        return emit_fix_unavailable();
+    }
+
     if robot_triage {
         return emit_robot_triage();
     }
@@ -19,10 +24,7 @@ pub fn handle_command(
     match action {
         Some(cli::DoctorAction::Health { json }) => emit_health(*json || json_output),
         Some(cli::DoctorAction::Capabilities { json }) => emit_capabilities(*json || json_output),
-        Some(cli::DoctorAction::RobotDocs) => {
-            print_robot_docs();
-            0
-        }
+        Some(cli::DoctorAction::RobotDocs) => emit_robot_docs(None),
         None => emit_health(json_output),
     }
 }
@@ -40,7 +42,7 @@ fn emit_health(json_output: bool) -> u8 {
     if ok { 0 } else { 2 }
 }
 
-fn emit_capabilities(json_output: bool) -> u8 {
+pub fn emit_capabilities(json_output: bool) -> u8 {
     let report = capabilities_report();
 
     if json_output {
@@ -52,7 +54,7 @@ fn emit_capabilities(json_output: bool) -> u8 {
     0
 }
 
-fn emit_robot_triage() -> u8 {
+pub fn emit_robot_triage() -> u8 {
     let health = health_report();
     let ok = health.get("ok").and_then(Value::as_bool).unwrap_or(false);
     let report = json!({
@@ -84,11 +86,20 @@ fn emit_robot_triage() -> u8 {
             {
                 "id": "hash-doctor-003",
                 "name": "accidental-fix-mode",
-                "detector": "hashbytes doctor --fix exits with CLI parse error",
+                "detector": "hashbytes doctor --fix exits 2 with safe alternatives",
+                "status": "covered_by_tests"
+            },
+            {
+                "id": "hash-agent-001",
+                "name": "top-level-agent-discovery",
+                "detector": "hashbytes --robot-triage && hashbytes capabilities --json && hashbytes robot-docs guide",
                 "status": "covered_by_tests"
             }
         ],
         "recommended_next_commands": [
+            "hashbytes --robot-triage",
+            "hashbytes capabilities --json",
+            "hashbytes robot-docs guide",
             "hashbytes doctor health --json",
             "hashbytes doctor capabilities --json",
             "hashbytes --describe",
@@ -161,6 +172,24 @@ fn capabilities_report() -> Value {
                     "description": "Return one machine-readable health and triage report"
                 }
             ]
+        },
+        "agent_surfaces": {
+            "global_json": {
+                "argv": ["hashbytes", "--json"],
+                "description": "Accepted as structured-output intent; normal hash output is already JSONL"
+            },
+            "robot_triage": {
+                "argv": ["hashbytes", "--robot-triage"],
+                "description": "Return one read-only machine-readable health, capability, and recommendation report"
+            },
+            "capabilities": {
+                "argv": ["hashbytes", "capabilities", "--json"],
+                "description": "Return machine-readable tool capabilities without reading stdin or appending witness records"
+            },
+            "robot_docs": {
+                "argv": ["hashbytes", "robot-docs", "guide"],
+                "description": "Print paste-ready agent guidance for safe hashbytes operation"
+            }
         },
         "hashbytes_capabilities": {
             "streaming_jsonl": true,
@@ -366,21 +395,42 @@ fn print_health_text(report: &Value) {
 }
 
 fn print_capabilities_text() {
-    println!("hashbytes doctor capabilities");
+    println!("hashbytes capabilities");
     println!("read_only: true");
     println!("fix_mode: unavailable");
     println!("commands:");
+    println!("- hashbytes --robot-triage");
+    println!("- hashbytes capabilities --json");
+    println!("- hashbytes robot-docs guide");
+    println!("- hashbytes --json");
     println!("- hashbytes doctor health --json");
     println!("- hashbytes doctor capabilities --json");
     println!("- hashbytes doctor robot-docs");
     println!("- hashbytes doctor --robot-triage");
 }
 
+pub fn emit_robot_docs(_action: Option<&cli::RobotDocsAction>) -> u8 {
+    print_robot_docs();
+    0
+}
+
+pub fn emit_fix_unavailable() -> u8 {
+    eprintln!("hashbytes doctor --fix is unavailable; doctor is read-only in this release.");
+    eprintln!("Safe alternatives:");
+    eprintln!("- hashbytes --robot-triage");
+    eprintln!("- hashbytes doctor capabilities --json");
+    eprintln!("- hashbytes capabilities --json");
+    2
+}
+
 fn print_robot_docs() {
-    println!("hashbytes doctor robot-docs");
+    println!("hashbytes robot-docs guide");
     println!(
         "Purpose: inspect the compiled hashbytes contract without reading manifests, hashing files, or appending witness records."
     );
+    println!("Top-level triage: hashbytes --robot-triage");
+    println!("Top-level capabilities: hashbytes capabilities --json");
+    println!("Structured hash output: hashbytes --json # accepted; normal stdout is already JSONL");
     println!("Health: hashbytes doctor health --json");
     println!("Capabilities: hashbytes doctor capabilities --json");
     println!("Triage: hashbytes doctor --robot-triage");

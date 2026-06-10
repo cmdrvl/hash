@@ -13,6 +13,8 @@ fn base_cli() -> Cli {
     Cli {
         command: None,
         input: None,
+        json: false,
+        robot_triage: false,
         algorithm: "sha256".to_string(),
         jobs: None,
         no_witness: false,

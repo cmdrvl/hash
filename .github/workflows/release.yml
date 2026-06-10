@@ -93,6 +93,10 @@ jobs:
           ./target/${{ matrix.target }}/release/hashbytes doctor capabilities --json
           ./target/${{ matrix.target }}/release/hashbytes doctor robot-docs
           ./target/${{ matrix.target }}/release/hashbytes doctor --robot-triage
+          ./target/${{ matrix.target }}/release/hashbytes --robot-triage
+          ./target/${{ matrix.target }}/release/hashbytes capabilities --json
+          ./target/${{ matrix.target }}/release/hashbytes robot-docs guide
+          ./target/${{ matrix.target }}/release/hashbytes --json --no-witness </dev/null
 
       - name: Strip binary (linux)
         if: matrix.strip == 'linux'
@@ -376,7 +380,6 @@ jobs:
           class CmdrvlHash < Formula
             desc "Streaming content hashing for JSONL manifest records"
             homepage "https://github.com/cmdrvl/hash"
-            version "{bare}"
             license "MIT"
           {"".join(chr(10) + line for line in blocks)}
 

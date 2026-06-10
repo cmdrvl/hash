@@ -13,7 +13,7 @@
 **Prove what's inside every file — byte-level identity for every artifact in a manifest.**
 
 ```bash
-brew install cmdrvl/tap/hashbytes
+brew install cmdrvl/tap/cmdrvl-hash
 ```
 
 </div>
@@ -124,10 +124,14 @@ Input stream is invalid — not valid JSONL, missing required fields, or I/O err
 
 ```json
 {
-  "code": "E_BAD_INPUT",
-  "message": "Invalid JSONL on line 3",
-  "detail": { "line": 3, "error": "expected value at line 1 column 1" },
-  "next_command": null
+  "version": "hash.v0",
+  "outcome": "REFUSAL",
+  "refusal": {
+    "code": "E_BAD_INPUT",
+    "message": "Input is not valid JSONL or missing required fields",
+    "detail": { "line": 3, "error": "expected value at line 1 column 1" },
+    "next_command": "vacuum <ROOT> | hashbytes"
+  }
 }
 ```
 
@@ -163,13 +167,8 @@ Input stream is invalid — not valid JSONL, missing required fields, or I/O err
 ### Homebrew (Recommended)
 
 ```bash
-brew install cmdrvl/tap/hashbytes
-```
-
-### Shell Script
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/cmdrvl/hash/main/scripts/install.sh | bash
+brew install cmdrvl/tap/cmdrvl-hash
+hashbytes --version
 ```
 
 ### From Source
@@ -185,6 +184,9 @@ cargo build --release
 
 ```bash
 hashbytes [<INPUT>] [OPTIONS]
+hashbytes --robot-triage
+hashbytes capabilities --json
+hashbytes robot-docs guide
 hashbytes witness <query|last|count> [OPTIONS]
 hashbytes doctor health [--json]
 hashbytes doctor capabilities --json
@@ -200,6 +202,8 @@ hashbytes doctor --robot-triage
 
 | Flag | Type | Default | Description |
 |------|------|---------|-------------|
+| `--json` | flag | `false` | Accepted as structured-output intent; normal stdout is already JSONL |
+| `--robot-triage` | flag | `false` | Emit one read-only machine-readable health, capability, and recommendation report |
 | `--algorithm <ALG>` | string | `sha256` | Hash algorithm: `sha256` or `blake3` (case-insensitive) |
 | `--jobs <N>` | integer | CPU count | Parallel workers; `--jobs 1` for sequential |
 | `--no-witness` | flag | `false` | Suppress witness ledger recording |
@@ -209,6 +213,16 @@ hashbytes doctor --robot-triage
 | `--version` | flag | `false` | Print `hashbytes <semver>` to stdout, exit `0` |
 
 ### Doctor
+
+Top-level agent discovery surfaces return before the hashing workflow, so they do
+not read stdin, open input manifests, hash artifact bytes, or append witness
+records.
+
+```bash
+hashbytes --robot-triage
+hashbytes capabilities --json
+hashbytes robot-docs guide
+```
 
 `hashbytes doctor` is a read-only diagnostic surface for agents and release
 automation. It returns before the hashing workflow, so it does not read stdin,
@@ -222,9 +236,10 @@ hashbytes doctor robot-docs
 hashbytes doctor --robot-triage
 ```
 
-`doctor --fix` is intentionally unavailable in this release. Repair mode is
-deferred until hash-specific detector, backup, inverse, and fixture coverage
-exists.
+`doctor --fix` is intentionally unavailable in this release. It exits `2` and
+prints safe read-only alternatives instead of falling through to generic parser
+help. Repair mode is deferred until hash-specific detector, backup, inverse, and
+fixture coverage exists.
 
 ### Exit Codes
 
@@ -408,11 +423,14 @@ $ hashbytes --describe | jq '.pipeline'
   "downstream": ["fingerprint", "lock", "pack"]
 }
 
-$ hashbytes doctor capabilities --json | jq '.doctor.fix_mode'
+$ hashbytes capabilities --json | jq '.doctor.fix_mode'
 {
   "available": false,
   "fixers": []
 }
+
+$ hashbytes --robot-triage | jq '.recommended_next_commands[0]'
+"hashbytes --robot-triage"
 ```
 
 ### Agent workflow
@@ -426,7 +444,7 @@ case $? in
   1) echo "partial — some files couldn't be hashed"
      jq -s '[.[] | select(._skipped == true)] | length' hashed.jsonl ;;
   2) echo "refusal"
-     cat hashed.jsonl | jq '.code'
+     cat hashed.jsonl | jq '.refusal.code'
      exit 1 ;;
 esac
 
@@ -438,6 +456,8 @@ cat hashed.jsonl | lock --dataset-id "dec" > dec.lock.json
 
 - **Exit codes** — `0`/`1`/`2` map to complete/partial/error branching
 - **Structured JSONL only** — stdout is always machine-readable
+- **`--json`** — accepted on the main workflow because stdout is already machine-readable JSONL
+- **`--robot-triage` / `capabilities --json` / `robot-docs guide`** — expose agent discovery without touching input data
 - **`--describe`** — prints `operator.json` so an agent discovers the tool without reading docs
 - **`--schema`** — prints the record JSON schema for programmatic validation
 - **`doctor`** — reports binary health, capabilities, and triage data without touching input data

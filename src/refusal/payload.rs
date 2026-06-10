@@ -40,6 +40,7 @@ impl RefusalEnvelope {
             RefusalCode::BadInput,
             json!({ "line": line, "error": error.into() }),
         )
+        .with_next_command("vacuum <ROOT> | hashbytes")
     }
 
     pub fn bad_input_missing_field(line: usize, field: impl Into<String>) -> Self {
@@ -47,10 +48,12 @@ impl RefusalEnvelope {
             RefusalCode::BadInput,
             json!({ "line": line, "missing_field": field.into() }),
         )
+        .with_next_command("vacuum <ROOT> | hashbytes")
     }
 
     pub fn io_error(error: impl Into<String>) -> Self {
         Self::from_code(RefusalCode::Io, json!({ "error": error.into() }))
+            .with_next_command("hashbytes --help")
     }
 
     pub fn with_next_command(mut self, command: impl Into<String>) -> Self {

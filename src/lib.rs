@@ -62,15 +62,30 @@ pub fn run() -> u8 {
 }
 
 pub fn run_with_cli(cli: cli::Cli) -> u8 {
+    if cli.robot_triage {
+        return doctor::emit_robot_triage();
+    }
+
+    match &cli.command {
+        Some(cli::Command::Capabilities { json }) => {
+            return doctor::emit_capabilities(*json || cli.json);
+        }
+        Some(cli::Command::RobotDocs { action }) => {
+            return doctor::emit_robot_docs(action.as_ref());
+        }
+        _ => {}
+    }
+
     // Doctor commands are intentionally read-only and must return before the
     // stream hashing workflow can read input or append witness records.
     if let Some(cli::Command::Doctor {
         action,
         robot_triage,
         json,
+        fix,
     }) = &cli.command
     {
-        return doctor::handle_command(action.as_ref(), *robot_triage, *json);
+        return doctor::handle_command(action.as_ref(), *robot_triage, *json || cli.json, *fix);
     }
 
     // Handle immediate flags that don't require input processing
@@ -83,6 +98,10 @@ pub fn run_with_cli(cli: cli::Cli) -> u8 {
         print_json_schema();
         return 0;
     }
+
+    // `hashbytes --json` is intentionally a no-op for the main workflow:
+    // normal stdout is already structured JSONL, one record per input line.
+    let _json_output_already_enabled = cli.json;
 
     // Handle witness subcommands
     if let Some(cli::Command::Witness { action }) = &cli.command {
@@ -125,13 +144,16 @@ fn handle_main_workflow(cli: &cli::Cli) -> RunResult {
     let algorithm = match cli.algorithm.parse::<cli::Algorithm>() {
         Ok(alg) => alg,
         Err(err) => {
-            return refusal_result(refusal::RefusalEnvelope::from_code(
-                refusal::RefusalCode::BadInput,
-                serde_json::json!({
-                    "algorithm": cli.algorithm,
-                    "error": err
-                }),
-            ));
+            return refusal_result(
+                refusal::RefusalEnvelope::from_code(
+                    refusal::RefusalCode::BadInput,
+                    serde_json::json!({
+                        "algorithm": cli.algorithm,
+                        "error": err
+                    }),
+                )
+                .with_next_command("hashbytes --algorithm sha256"),
+            );
         }
     };
 
@@ -140,7 +162,10 @@ fn handle_main_workflow(cli: &cli::Cli) -> RunResult {
         Some(path) => match std::fs::File::open(path) {
             Ok(file) => Box::new(std::io::BufReader::new(file)),
             Err(err) => {
-                return refusal_result(refusal::RefusalEnvelope::io_error(err.to_string()));
+                return refusal_result(
+                    refusal::RefusalEnvelope::io_error(err.to_string())
+                        .with_next_command(format!("ls -la {}", shell_quote_path(path))),
+                );
             }
         },
         None => Box::new(std::io::BufReader::new(std::io::stdin())),
@@ -240,7 +265,7 @@ fn refusal_result(refusal: refusal::RefusalEnvelope) -> RunResult {
             "detail": {
                 "error": err.to_string()
             },
-            "next_command": null
+            "next_command": "hashbytes --help"
         })
         .to_string()
     });
@@ -408,13 +433,16 @@ fn process_record(
     } = pending;
 
     let Some(record_obj) = record.as_object() else {
-        return Err(Box::new(refusal::RefusalEnvelope::from_code(
-            refusal::RefusalCode::BadInput,
-            serde_json::json!({
-                "line": line_number,
-                "error": "record must be a JSON object"
-            }),
-        )));
+        return Err(Box::new(
+            refusal::RefusalEnvelope::from_code(
+                refusal::RefusalCode::BadInput,
+                serde_json::json!({
+                    "line": line_number,
+                    "error": "record must be a JSON object"
+                }),
+            )
+            .with_next_command("vacuum <ROOT> | hashbytes"),
+        ));
     };
 
     if pipeline::enricher::is_skipped(record_obj) {
@@ -490,4 +518,9 @@ fn emit_processed_record(
     }
 
     Ok(())
+}
+
+fn shell_quote_path(path: &std::path::Path) -> String {
+    let raw = path.to_string_lossy();
+    format!("'{}'", raw.replace('\'', "'\\''"))
 }

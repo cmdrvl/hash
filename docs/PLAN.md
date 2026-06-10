@@ -66,6 +66,9 @@ vacuum /data/2025-12/ | hashbytes | lock --dataset-id "raw-dec" > raw.lock.json
 
 ```bash
 hashbytes [<INPUT>] [OPTIONS]
+hashbytes --robot-triage
+hashbytes capabilities --json
+hashbytes robot-docs guide
 hashbytes witness <query|last|count> [OPTIONS]
 hashbytes doctor health [--json]
 hashbytes doctor capabilities --json
@@ -79,6 +82,8 @@ hashbytes doctor --robot-triage
 
 ### Flags
 
+- `--json`: Accepted as structured-output intent. Normal hash stdout is already JSONL, so this is a no-op for the hashing workflow.
+- `--robot-triage`: Emit one read-only machine-readable health, capability, and recommendation report before input opening or witness append.
 - `--algorithm <ALG>`: Hash algorithm. Accepted values: `sha256` (default), `blake3`. Case-insensitive.
 - `--jobs <N>`: Number of parallel hashing workers (default: number of available CPUs). `--jobs 1` for sequential processing.
 - `--no-witness`: Suppress witness ledger recording for this run.
@@ -86,6 +91,18 @@ hashbytes doctor --robot-triage
 - `--schema`: Print the JSON Schema for the JSONL record to stdout and exit 0. Like `--describe`, checked before input is validated.
 - `--progress`: Emit structured progress JSONL to stderr (see Progress reporting).
 - `--version`: Print `hashbytes <semver>` to stdout and exit 0.
+
+### Top-level agent discovery
+
+The first commands an agent is likely to try must work without touching data:
+
+- `hashbytes --robot-triage`: one machine-readable health/capability/recommendation report.
+- `hashbytes capabilities --json`: machine-readable tool capabilities and side-effect promises.
+- `hashbytes robot-docs guide`: paste-ready agent usage notes.
+- `hashbytes --json`: accepted on the main workflow because stdout is already JSONL.
+
+These surfaces exit before input opening, stdin reads, artifact hashing, witness
+directory creation, or witness append.
 
 ### Doctor subcommands
 
@@ -100,7 +117,8 @@ witness directories, append witness records, or use the network.
 - `--robot-triage`: emit one machine-readable health and triage payload.
 
 `doctor --fix` is intentionally unavailable until detector, backup, inverse, and
-fixture coverage exists for hash-specific repairs.
+fixture coverage exists for hash-specific repairs. It exits `2` with safe
+read-only alternatives.
 
 ### Exit codes
 
@@ -268,7 +286,7 @@ Refusal JSON envelope (same wrapper as all spine tools):
     "code": "E_BAD_INPUT",
     "message": "Input is not valid JSONL",
     "detail": { "line": 42, "error": "expected value at line 1 column 1" },
-    "next_command": null
+    "next_command": "vacuum <ROOT> | hashbytes"
   }
 }
 ```
@@ -554,8 +572,8 @@ fn main() -> std::process::ExitCode {
 ```json
 {
   "schema_version": "operator.v0",
-  "name": "hash",
-  "version": "0.1.0",
+  "name": "hashbytes",
+  "version": "0.5.0",
   "description": "Computes exact byte identity (SHA-256 or BLAKE3) for artifacts in a manifest",
   "repository": "https://github.com/cmdrvl/hash",
   "license": "MIT",
@@ -564,7 +582,7 @@ fn main() -> std::process::ExitCode {
     "binary": "hashbytes",
     "output_mode": "stream",
     "output_schema": "hash.v0",
-    "json_flag": null
+    "json_flag": "--json"
   },
 
   "arguments": [
@@ -572,8 +590,16 @@ fn main() -> std::process::ExitCode {
   ],
 
   "options": [
+    { "name": "json", "flag": "--json", "type": "boolean", "description": "Accepted as structured-output intent; normal hash output is already JSONL" },
+    { "name": "robot-triage", "flag": "--robot-triage", "type": "boolean", "description": "Emit one read-only machine-readable health, capability, and recommendation report" },
     { "name": "algorithm", "flag": "--algorithm", "type": "string", "default": "sha256", "description": "Hash algorithm: sha256 or blake3" },
     { "name": "jobs", "flag": "--jobs", "type": "integer", "description": "Number of parallel workers (default: CPU count)" }
+  ],
+
+  "subcommands": [
+    { "name": "capabilities", "usage": "hashbytes capabilities --json", "description": "Return machine-readable tool capabilities without reading stdin or appending witness records", "read_only": true },
+    { "name": "robot-docs", "usage": "hashbytes robot-docs guide", "description": "Print concise agent-facing usage notes", "read_only": true },
+    { "name": "doctor", "description": "Read-only health checks and agent-facing diagnostics", "read_only": true }
   ],
 
   "exit_codes": {
@@ -590,7 +616,13 @@ fn main() -> std::process::ExitCode {
   "capabilities": {
     "formats": ["*"],
     "profile_aware": false,
-    "streaming": true
+    "streaming": true,
+    "agent_surfaces": [
+      "hashbytes --robot-triage",
+      "hashbytes capabilities --json",
+      "hashbytes robot-docs guide",
+      "hashbytes --json"
+    ]
   },
 
   "pipeline": {

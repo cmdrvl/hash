@@ -81,6 +81,28 @@ fn doctor_capabilities_json_advertises_no_fixers_or_side_effects() {
 }
 
 #[test]
+fn top_level_capabilities_json_advertises_agent_surfaces() {
+    let (mut command, witness_path) = isolated_command("top-level-capabilities");
+    let output = command
+        .args(["capabilities", "--json"])
+        .output()
+        .expect("hashbytes capabilities should run");
+
+    assert!(output.status.success());
+    let report = parse_stdout_json(&output);
+    assert_eq!(report["$schema"], "hashbytes.doctor.capabilities.v1");
+    assert_eq!(
+        report["agent_surfaces"]["robot_triage"]["argv"][0],
+        "hashbytes"
+    );
+    assert_eq!(
+        report["agent_surfaces"]["capabilities"]["argv"][1],
+        "capabilities"
+    );
+    assert!(!witness_path.exists());
+}
+
+#[test]
 fn doctor_robot_triage_json_is_machine_readable() {
     let (mut command, witness_path) = isolated_command("triage");
     let output = command
@@ -98,7 +120,26 @@ fn doctor_robot_triage_json_is_machine_readable() {
             .as_array()
             .is_some_and(|commands| commands.iter().any(|command| command
                 .as_str()
-                .is_some_and(|command| command == "hashbytes doctor health --json")))
+                .is_some_and(|command| command == "hashbytes --robot-triage")))
+    );
+    assert!(!witness_path.exists());
+}
+
+#[test]
+fn top_level_robot_triage_is_machine_readable() {
+    let (mut command, witness_path) = isolated_command("top-level-triage");
+    let output = command
+        .arg("--robot-triage")
+        .output()
+        .expect("hashbytes --robot-triage should run");
+
+    assert!(output.status.success());
+    let report = parse_stdout_json(&output);
+    assert_eq!(report["$schema"], "hashbytes.doctor.triage.v1");
+    assert_eq!(report["ok"], true);
+    assert_eq!(
+        report["capabilities"]["agent_surfaces"]["robot_docs"]["argv"][2],
+        "guide"
     );
     assert!(!witness_path.exists());
 }
@@ -113,8 +154,23 @@ fn doctor_robot_docs_is_plain_text() {
 
     assert!(output.status.success());
     let stdout = String::from_utf8(output.stdout).expect("stdout should be utf-8");
-    assert!(stdout.contains("hashbytes doctor robot-docs"));
+    assert!(stdout.contains("hashbytes robot-docs guide"));
     assert!(stdout.contains("Fix mode: unavailable"));
+    assert!(!witness_path.exists());
+}
+
+#[test]
+fn top_level_robot_docs_guide_is_plain_text() {
+    let (mut command, witness_path) = isolated_command("top-level-robot-docs");
+    let output = command
+        .args(["robot-docs", "guide"])
+        .output()
+        .expect("hashbytes robot-docs guide should run");
+
+    assert!(output.status.success());
+    let stdout = String::from_utf8(output.stdout).expect("stdout should be utf-8");
+    assert!(stdout.contains("hashbytes robot-docs guide"));
+    assert!(stdout.contains("hashbytes capabilities --json"));
     assert!(!witness_path.exists());
 }
 
@@ -124,11 +180,12 @@ fn doctor_fix_is_not_available() {
     let output = command
         .args(["doctor", "--fix"])
         .output()
-        .expect("hashbytes doctor --fix should run and fail in parser");
+        .expect("hashbytes doctor --fix should run and report unavailable");
 
     assert_eq!(output.status.code(), Some(2));
     let stderr = String::from_utf8(output.stderr).expect("stderr should be utf-8");
-    assert!(stderr.contains("unexpected argument '--fix'"));
+    assert!(stderr.contains("doctor --fix is unavailable"));
+    assert!(stderr.contains("hashbytes --robot-triage"));
     assert!(!witness_path.exists());
 }
 
@@ -159,6 +216,23 @@ fn domain_hashing_runs_without_guard_hooks() {
     assert!(
         output.stdout.is_empty(),
         "empty stdin should produce no hashed records"
+    );
+    assert!(!witness_path.exists());
+}
+
+#[test]
+fn top_level_json_is_noop_for_empty_stream() {
+    let (mut command, witness_path, _) = isolated_command_with_root("json-noop");
+
+    let output = command
+        .args(["--json", "--no-witness"])
+        .output()
+        .expect("hashbytes --json should run");
+
+    assert!(output.status.success());
+    assert!(
+        output.stdout.is_empty(),
+        "empty stdin should still produce no hashed records"
     );
     assert!(!witness_path.exists());
 }

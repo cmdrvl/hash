@@ -1,5 +1,5 @@
 use clap::{CommandFactory, Parser, error::ErrorKind};
-use hashbytes::cli::{Cli, Command, WitnessAction};
+use hashbytes::cli::{Cli, Command, RobotDocsAction, WitnessAction};
 use std::path::PathBuf;
 
 #[test]
@@ -7,6 +7,8 @@ fn parses_default_root_command() {
     let cli = Cli::try_parse_from(["hashbytes"]).expect("default parse should succeed");
     assert!(cli.command.is_none());
     assert!(cli.input.is_none());
+    assert!(!cli.json);
+    assert!(!cli.robot_triage);
     assert_eq!(cli.algorithm, "sha256");
     assert!(cli.jobs.is_none());
     assert!(!cli.no_witness);
@@ -20,6 +22,8 @@ fn parses_input_and_flags() {
     let cli = Cli::try_parse_from([
         "hash",
         "manifest.jsonl",
+        "--json",
+        "--robot-triage",
         "--algorithm",
         "BLAKE3",
         "--jobs",
@@ -32,6 +36,8 @@ fn parses_input_and_flags() {
     .expect("flag parse should succeed");
 
     assert_eq!(cli.input, Some(PathBuf::from("manifest.jsonl")));
+    assert!(cli.json);
+    assert!(cli.robot_triage);
     assert_eq!(cli.algorithm, "BLAKE3");
     assert_eq!(cli.jobs, Some(4));
     assert!(cli.no_witness);
@@ -41,7 +47,31 @@ fn parses_input_and_flags() {
 }
 
 #[test]
-fn parses_witness_query_subcommand() {
+fn parses_top_level_agent_surfaces() -> Result<(), String> {
+    let capabilities = Cli::try_parse_from(["hashbytes", "capabilities", "--json"])
+        .map_err(|err| err.to_string())?;
+    match capabilities.command {
+        Some(Command::Capabilities { json }) => assert!(json),
+        _ => return Err("expected capabilities command".to_owned()),
+    }
+
+    let robot_docs =
+        Cli::try_parse_from(["hashbytes", "robot-docs", "guide"]).map_err(|err| err.to_string())?;
+    match robot_docs.command {
+        Some(Command::RobotDocs {
+            action: Some(RobotDocsAction::Guide),
+        }) => {}
+        _ => return Err("expected robot-docs guide command".to_owned()),
+    }
+
+    let triage =
+        Cli::try_parse_from(["hashbytes", "--robot-triage"]).map_err(|err| err.to_string())?;
+    assert!(triage.robot_triage);
+    Ok(())
+}
+
+#[test]
+fn parses_witness_query_subcommand() -> Result<(), String> {
     let cli = Cli::try_parse_from([
         "hash",
         "witness",
@@ -60,7 +90,7 @@ fn parses_witness_query_subcommand() {
         "10",
         "--json",
     ])
-    .expect("witness query parse should succeed");
+    .map_err(|err| err.to_string())?;
 
     match cli.command {
         Some(Command::Witness {
@@ -83,19 +113,21 @@ fn parses_witness_query_subcommand() {
             assert_eq!(limit, Some(10));
             assert!(json);
         }
-        _ => panic!("expected witness query command"),
+        _ => return Err("expected witness query command".to_owned()),
     }
+
+    Ok(())
 }
 
 #[test]
-fn parses_witness_last_and_count_subcommands() {
+fn parses_witness_last_and_count_subcommands() -> Result<(), String> {
     let last = Cli::try_parse_from(["hashbytes", "witness", "last", "--json"])
-        .expect("witness last parse should succeed");
+        .map_err(|err| err.to_string())?;
     match last.command {
         Some(Command::Witness {
             action: WitnessAction::Last { json },
         }) => assert!(json),
-        _ => panic!("expected witness last command"),
+        _ => return Err("expected witness last command".to_owned()),
     }
 
     let count = Cli::try_parse_from([
@@ -108,7 +140,7 @@ fn parses_witness_last_and_count_subcommands() {
         "ALL_HASHED",
         "--json",
     ])
-    .expect("witness count parse should succeed");
+    .map_err(|err| err.to_string())?;
     match count.command {
         Some(Command::Witness {
             action:
@@ -128,12 +160,14 @@ fn parses_witness_last_and_count_subcommands() {
             assert!(input_hash.is_none());
             assert!(json);
         }
-        _ => panic!("expected witness count command"),
+        _ => return Err("expected witness count command".to_owned()),
     }
+
+    Ok(())
 }
 
 #[test]
-fn exposes_expected_long_flags_and_version_behavior() {
+fn exposes_expected_long_flags_and_version_behavior() -> Result<(), String> {
     let command = Cli::command();
     let long_flags: Vec<_> = command
         .get_arguments()
@@ -142,6 +176,8 @@ fn exposes_expected_long_flags_and_version_behavior() {
 
     for flag in [
         "algorithm",
+        "json",
+        "robot-triage",
         "jobs",
         "no-witness",
         "progress",
@@ -151,9 +187,9 @@ fn exposes_expected_long_flags_and_version_behavior() {
         assert!(long_flags.contains(&flag), "missing --{flag}");
     }
 
-    let version_err = match Cli::try_parse_from(["hashbytes", "--version"]) {
-        Ok(_) => panic!("version should short-circuit"),
-        Err(err) => err,
+    let Err(version_err) = Cli::try_parse_from(["hashbytes", "--version"]) else {
+        return Err("version should short-circuit".to_owned());
     };
     assert_eq!(version_err.kind(), ErrorKind::DisplayVersion);
+    Ok(())
 }

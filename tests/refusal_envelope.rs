@@ -30,7 +30,10 @@ fn bad_input_parse_error_creates_correct_detail() {
         "error": "expected value at line 1 column 1"
     });
     assert_eq!(envelope.refusal.detail, expected_detail);
-    assert_eq!(envelope.refusal.next_command, None);
+    assert_eq!(
+        envelope.refusal.next_command.as_deref(),
+        Some("vacuum <ROOT> | hashbytes")
+    );
 }
 
 #[test]
@@ -97,7 +100,7 @@ fn to_value_serializes_correctly() {
                 "line": 5,
                 "error": "invalid json"
             },
-            "next_command": null
+            "next_command": "vacuum <ROOT> | hashbytes"
         }
     });
 
