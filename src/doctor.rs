@@ -199,6 +199,31 @@ fn capabilities_report() -> Value {
             "witness_query": true,
             "default_witness_append_for_hashing": true
         },
+        "composition": {
+            "family": {
+                "name": "cmdrvl-spine",
+                "siblings": [
+                    {"tool": "vacuum", "capabilities": "vacuum capabilities --json"},
+                    {"tool": "hashbytes", "capabilities": "hashbytes capabilities --json"},
+                    {"tool": "fingerprint", "capabilities": "fingerprint capabilities --json"},
+                    {"tool": "lock", "capabilities": "lock capabilities --json"},
+                    {"tool": "pack", "capabilities": "pack capabilities --json"}
+                ]
+            },
+            "role": "middle of the evidence stream; add byte identity to vacuum records",
+            "position": 2,
+            "accepts": ["vacuum.v0 JSONL"],
+            "produces": ["hash.v0 JSONL"],
+            "canonical_chain": [
+                "vacuum --json <ROOT>... | hashbytes | fingerprint --fp <ID> | lock --dataset-id <DATASET> > dataset.lock.json",
+                "pack seal dataset.lock.json --output evidence/<DATASET>/"
+            ],
+            "agent_rules": [
+                "Pipe vacuum JSONL into hashbytes when downstream tools need bytes_hash.",
+                "Do not send raw human file listings to hashbytes; send versioned JSONL records.",
+                "Use --no-witness for deterministic read-side smoke tests."
+            ]
+        },
         "side_effects": {
             "reads_stdin": false,
             "reads_input_manifest": false,
@@ -431,6 +456,10 @@ fn print_robot_docs() {
     println!("Top-level triage: hashbytes --robot-triage");
     println!("Top-level capabilities: hashbytes capabilities --json");
     println!("Structured hash output: hashbytes --json # accepted; normal stdout is already JSONL");
+    println!(
+        "Composition: vacuum --json <ROOT>... | hashbytes | fingerprint --fp <ID> | lock --dataset-id <DATASET> > dataset.lock.json"
+    );
+    println!("Seal: pack seal dataset.lock.json --output evidence/<DATASET>/");
     println!("Health: hashbytes doctor health --json");
     println!("Capabilities: hashbytes doctor capabilities --json");
     println!("Triage: hashbytes doctor --robot-triage");
