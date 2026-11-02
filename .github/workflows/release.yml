@@ -132,7 +132,7 @@ jobs:
           mkdir -p "$dist_dir"
           cp "target/${{ matrix.target }}/release/${{ matrix.bin }}" "$dist_dir/hashbytes"
           cp README.md "$dist_dir/"
-          cp LICENSE* "$dist_dir/" 2>/dev/null || true
+          cp LICENSE "$dist_dir/"
           tar -czf "hashbytes-${{ steps.version.outputs.version }}-${{ matrix.target }}.tar.gz" -C "$dist_dir" .
 
       - name: Package archive (windows)
@@ -143,6 +143,7 @@ jobs:
           New-Item -ItemType Directory -Force -Path $dist | Out-Null
           Copy-Item "target/${{ matrix.target }}/release/${{ matrix.bin }}" "$dist\\hashbytes.exe"
           Copy-Item README.md $dist
+          Copy-Item LICENSE $dist
           Compress-Archive -Path "$dist\\*" -DestinationPath "hashbytes-${{ steps.version.outputs.version }}-${{ matrix.target }}.zip" -Force
 
       - name: Upload archive
