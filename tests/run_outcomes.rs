@@ -98,7 +98,10 @@ fn witness_subcommands_route_to_witness_handler_exit_codes() {
         },
     });
 
-    assert_eq!(run_with_cli(cli), 1);
+    // An empty read-only query is a successful witness operation, not a
+    // partial hashing outcome. The JSON result remains [] and the command
+    // exits zero even when no ledger record matches the filters.
+    assert_eq!(run_with_cli(cli), 0);
 }
 
 #[test]

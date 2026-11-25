@@ -143,12 +143,12 @@ fn query_applies_since_and_until_bounds() {
 }
 
 #[test]
-fn last_returns_null_and_exit_one_when_ledger_is_empty() {
+fn last_returns_null_and_exit_zero_when_ledger_is_empty() {
     let witness_path = unique_path("last-empty");
     let _ = fs::remove_file(&witness_path);
 
     let output = run_hash_with_witness(&witness_path, &["witness", "last", "--json"]);
-    assert_eq!(output.status.code(), Some(1));
+    assert_eq!(output.status.code(), Some(0));
 
     let stdout = String::from_utf8(output.stdout).expect("stdout utf8");
     assert_eq!(stdout.trim(), "null");
@@ -200,7 +200,7 @@ fn query_skips_malformed_lines_and_keeps_valid_matches() {
 }
 
 #[test]
-fn count_outputs_json_and_respects_match_exit_codes() {
+fn count_outputs_json_and_exits_zero_for_matches_or_no_matches() {
     let witness_path = unique_path("count-json");
     write_witness_records(&witness_path, &sample_records());
 
@@ -219,7 +219,7 @@ fn count_outputs_json_and_respects_match_exit_codes() {
         &witness_path,
         &["witness", "count", "--tool", "missing", "--json"],
     );
-    assert_eq!(missing.status.code(), Some(1));
+    assert_eq!(missing.status.code(), Some(0));
     let missing_stdout = String::from_utf8(missing.stdout).expect("stdout utf8");
     assert_eq!(
         serde_json::from_str::<Value>(&missing_stdout).expect("count json"),

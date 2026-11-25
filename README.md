@@ -498,8 +498,7 @@ hashbytes witness count [--tool <name>] [--since <iso8601>] [--until <iso8601>] 
 
 | Code | Meaning |
 |------|---------|
-| `0` | One or more matching records returned |
-| `1` | No matches (or empty ledger for `last`) |
+| `0` | Successful read-only query, including no matches or an empty ledger |
 | `2` | CLI parse error or witness internal error |
 
 ### Ledger Location
