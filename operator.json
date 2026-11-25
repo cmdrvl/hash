@@ -1,7 +1,7 @@
 {
   "schema_version": "operator.v1",
   "name": "hashbytes",
-  "tool_version": "0.5.1",
+  "tool_version": "0.6.0",
   "contract_version": "1.0.0",
   "description": "Computes exact byte identity (SHA-256 or BLAKE3) for artifacts in a manifest",
   "repository": "https://github.com/cmdrvl/hash",
