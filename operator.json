@@ -1,13 +1,19 @@
 {
-  "schema_version": "operator.v0",
+  "schema_version": "operator.v1",
   "name": "hashbytes",
   "version": "0.5.1",
+  "contract_version": "1.0.0",
   "description": "Computes exact byte identity (SHA-256 or BLAKE3) for artifacts in a manifest",
   "repository": "https://github.com/cmdrvl/hash",
   "license": "MIT",
   "agent_guide": "https://github.com/cmdrvl/.github/blob/main/profile/AGENT_PROMPT.md",
   "invocation": {
     "binary": "hashbytes",
+    "usage": [
+      "hashbytes [INPUT] [--algorithm sha256|blake3]",
+      "hashbytes capabilities --json",
+      "hashbytes doctor --json"
+    ],
     "output_mode": "stream",
     "output_schema": "hash.v0",
     "json_flag": "--json"
@@ -32,7 +38,7 @@
       "name": "robot-triage",
       "flag": "--robot-triage",
       "type": "boolean",
-      "description": "Emit one read-only machine-readable health, capability, and recommendation report"
+      "description": "Legacy alias for doctor triage; emit one read-only machine-readable report"
     },
     {
       "name": "algorithm",
@@ -46,13 +52,37 @@
       "flag": "--jobs",
       "type": "integer",
       "description": "Number of parallel workers (default: CPU count)"
+    },
+    {
+      "name": "no-witness",
+      "flag": "--no-witness",
+      "type": "boolean",
+      "description": "Suppress witness ledger recording"
+    },
+    {
+      "name": "progress",
+      "flag": "--progress",
+      "type": "boolean",
+      "description": "Emit progress to stderr"
+    },
+    {
+      "name": "describe",
+      "flag": "--describe",
+      "type": "boolean",
+      "description": "Print the operator.v1 contract and exit"
+    },
+    {
+      "name": "schema",
+      "flag": "--schema",
+      "type": "boolean",
+      "description": "Print the hash.v0 JSON Schema and exit"
     }
   ],
-  "subcommands": [
+  "commands": [
     {
       "name": "capabilities",
       "usage": "hashbytes capabilities --json",
-      "description": "Return machine-readable tool capabilities without reading stdin or appending witness records",
+      "description": "Print the same operator.v1 contract as --describe",
       "read_only": true
     },
     {
@@ -63,63 +93,29 @@
     },
     {
       "name": "doctor",
-      "description": "Read-only health checks and agent-facing diagnostics",
-      "read_only": true,
-      "commands": [
-        {
-          "name": "health",
-          "usage": "hashbytes doctor health [--json]",
-          "description": "Validate compiled operator, schema, algorithm, stream, and witness contracts without reading input data"
-        },
-        {
-          "name": "capabilities",
-          "usage": "hashbytes doctor capabilities --json",
-          "description": "Return read-only doctor capabilities and explicit side-effect promises"
-        },
-        {
-          "name": "robot-docs",
-          "usage": "hashbytes doctor robot-docs",
-          "description": "Print concise agent-facing doctor usage notes"
-        },
-        {
-          "name": "robot-triage",
-          "usage": "hashbytes doctor --robot-triage",
-          "description": "Return one machine-readable health and triage report"
-        },
-        {
-          "name": "fix",
-          "usage": "hashbytes doctor --fix",
-          "description": "Exit 2 with safe read-only alternatives; repair mode is unavailable"
-        }
-      ],
-      "fix_mode": {
-        "available": false,
-        "reason": "Repair mode is deferred until hash-specific detector, backup, inverse, and fixture coverage exists"
-      },
-      "side_effects": {
-        "reads_stdin": false,
-        "reads_input_manifest": false,
-        "reads_artifact_bytes": false,
-        "hashes_files": false,
-        "opens_witness_ledger": false,
-        "appends_witness_ledger": false,
-        "creates_witness_directory": false,
-        "writes_doctor_artifacts": false,
-        "uses_network": false
-      }
+      "usage": "hashbytes doctor --json",
+      "description": "Read-only health, capabilities, and triage diagnostics",
+      "aliases": ["doctor health", "doctor capabilities", "doctor --robot-triage"],
+      "read_only": true
+    },
+    {
+      "name": "witness",
+      "usage": "hashbytes witness query --json",
+      "description": "Query the witness ledger",
+      "read_only": true
     }
   ],
   "exit_codes": {
     "0": {
-      "meaning": "ALL_HASHED",
+      "meaning": "successful hash or healthy doctor report",
       "domain": "positive"
     },
     "1": {
-      "meaning": "PARTIAL",
-      "domain": "negative"
+      "meaning": "partial hash result or unhealthy doctor report",
+      "domain": "unhealthy"
     },
     "2": {
-      "meaning": "REFUSAL",
+      "meaning": "refusal or command-line error",
       "domain": "error"
     }
   },
@@ -135,26 +131,34 @@
       "action": "escalate"
     }
   ],
-  "capabilities": {
-    "formats": [
-      "*"
-    ],
-    "profile_aware": false,
-    "streaming": true,
-    "agent_surfaces": [
-      "hashbytes --robot-triage",
-      "hashbytes capabilities --json",
-      "hashbytes robot-docs guide",
-      "hashbytes --json"
-    ]
+  "env_vars": [
+    {
+      "name": "EPISTEMIC_WITNESS",
+      "description": "Optional witness ledger path"
+    },
+    {
+      "name": "NO_COLOR",
+      "description": "Disable ANSI terminal styling"
+    },
+    {
+      "name": "TERM",
+      "description": "Terminal capability hint used for output styling"
+    }
+  ],
+  "formats": [
+    "hash.v0 JSONL",
+    "operator.v1 JSON",
+    "cmdrvl.doctor.v1 JSON"
+  ],
+  "side_effects": {
+    "reads_files": true,
+    "writes_files": false,
+    "network": false,
+    "writes_witness": true,
+    "notes": "Hashing reads the input manifest and referenced artifacts; doctor and introspection commands are read-only."
   },
   "pipeline": {
-    "upstream": [
-      "vacuum"
-    ],
-    "downstream": [
-      "fingerprint",
-      "lock"
-    ]
+    "upstream": ["vacuum"],
+    "downstream": ["fingerprint", "lock"]
   }
 }

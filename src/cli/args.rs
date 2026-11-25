@@ -1,10 +1,13 @@
-use clap::{Parser, Subcommand};
+use clap::{ColorChoice, Parser, Subcommand};
 use std::path::PathBuf;
 
 #[derive(Parser)]
-#[command(name = "hashbytes")]
-#[command(about = "Streaming content hashing for manifest enrichment")]
-#[command(version)]
+#[command(
+    name = "hashbytes",
+    about = "Streaming content hashing for manifest enrichment",
+    version,
+    color = ColorChoice::Never
+)]
 pub struct Cli {
     #[command(subcommand)]
     pub command: Option<Command>,
@@ -98,6 +101,12 @@ pub enum DoctorAction {
     },
     /// Describe read-only doctor capabilities
     Capabilities {
+        /// Emit JSON
+        #[arg(long)]
+        json: bool,
+    },
+    /// Emit the machine-readable triage report
+    Triage {
         /// Emit JSON
         #[arg(long)]
         json: bool,

@@ -2,10 +2,9 @@ use crate::{cli, witness};
 use serde_json::{Value, json};
 use std::str::FromStr;
 
-const HEALTH_SCHEMA: &str = "hashbytes.doctor.health.v1";
-const CAPABILITIES_SCHEMA: &str = "hashbytes.doctor.capabilities.v1";
-const TRIAGE_SCHEMA: &str = "hashbytes.doctor.triage.v1";
-const READ_ONLY_CONTRACT: &str = "cmdrvl.read_only_doctor.v1";
+const DOCTOR_SCHEMA_VERSION: &str = "cmdrvl.doctor.v1";
+const CONTRACT_VERSION: &str = "1.0.0";
+const OPERATOR_MANIFEST: &str = include_str!("../operator.json");
 
 pub fn handle_command(
     action: Option<&cli::DoctorAction>,
@@ -23,257 +22,184 @@ pub fn handle_command(
 
     match action {
         Some(cli::DoctorAction::Health { json }) => emit_health(*json || json_output),
-        Some(cli::DoctorAction::Capabilities { json }) => emit_capabilities(*json || json_output),
+        Some(cli::DoctorAction::Capabilities { json }) => {
+            emit_doctor_capabilities(*json || json_output)
+        }
+        Some(cli::DoctorAction::Triage { json }) => emit_triage(*json || json_output),
         Some(cli::DoctorAction::RobotDocs) => emit_robot_docs(None),
         None => emit_health(json_output),
     }
 }
 
-fn emit_health(json_output: bool) -> u8 {
-    let report = health_report();
-    let ok = report.get("ok").and_then(Value::as_bool).unwrap_or(false);
+/// Print the canonical operator contract used by both `--describe` and
+/// `capabilities --json`.
+pub fn emit_capabilities(json_output: bool) -> u8 {
+    if json_output {
+        print_operator_json();
+    } else {
+        print_capabilities_text();
+    }
+    0
+}
 
+pub fn emit_operator_json() -> u8 {
+    print_operator_json();
+    0
+}
+
+fn emit_health(json_output: bool) -> u8 {
+    let report = doctor_report("health");
     if json_output {
         print_json(&report);
     } else {
         print_health_text(&report);
     }
-
-    if ok { 0 } else { 2 }
+    doctor_exit_code(&report)
 }
 
-pub fn emit_capabilities(json_output: bool) -> u8 {
-    let report = capabilities_report();
-
+fn emit_doctor_capabilities(json_output: bool) -> u8 {
+    let report = doctor_report("capabilities");
     if json_output {
         print_json(&report);
     } else {
-        print_capabilities_text();
+        println!("hashbytes doctor capabilities");
+        println!("contract: hashbytes capabilities --json");
+        println!("healthy: {}", report["healthy"]);
     }
+    doctor_exit_code(&report)
+}
 
-    0
+fn emit_triage(json_output: bool) -> u8 {
+    let report = doctor_report("triage");
+    if json_output {
+        print_json(&report);
+    } else {
+        print_health_text(&report);
+        println!("next: hashbytes capabilities --json");
+    }
+    doctor_exit_code(&report)
 }
 
 pub fn emit_robot_triage() -> u8 {
-    let health = health_report();
-    let ok = health.get("ok").and_then(Value::as_bool).unwrap_or(false);
-    let report = json!({
-        "$schema": TRIAGE_SCHEMA,
-        "tool": "hashbytes",
-        "version": env!("CARGO_PKG_VERSION"),
-        "ok": ok,
-        "status": if ok { "healthy" } else { "unhealthy" },
-        "read_only_contract": READ_ONLY_CONTRACT,
-        "fix_mode": {
-            "available": false,
-            "reason": "hashbytes doctor is audit-only until detectors, backups, inverses, and fixtures exist"
-        },
-        "health": health,
-        "capabilities": capabilities_report(),
-        "failure_modes": [
-            {
-                "id": "hash-doctor-001",
-                "name": "doctor-positional-input-ambiguity",
-                "detector": "hashbytes doctor health --json",
-                "status": if ok { "covered" } else { "failing" }
-            },
-            {
-                "id": "hash-doctor-002",
-                "name": "witness-append-regression",
-                "detector": "run doctor commands with EPISTEMIC_WITNESS pointed at a nonexistent path",
-                "status": "covered_by_tests"
-            },
-            {
-                "id": "hash-doctor-003",
-                "name": "accidental-fix-mode",
-                "detector": "hashbytes doctor --fix exits 2 with safe alternatives",
-                "status": "covered_by_tests"
-            },
-            {
-                "id": "hash-agent-001",
-                "name": "top-level-agent-discovery",
-                "detector": "hashbytes --robot-triage && hashbytes capabilities --json && hashbytes robot-docs guide",
-                "status": "covered_by_tests"
-            }
-        ],
-        "recommended_next_commands": [
-            "hashbytes --robot-triage",
-            "hashbytes capabilities --json",
-            "hashbytes robot-docs guide",
-            "hashbytes doctor health --json",
-            "hashbytes doctor capabilities --json",
-            "hashbytes --describe",
-            "hashbytes --schema"
-        ]
-    });
-
-    print_json(&report);
-    if ok { 0 } else { 2 }
+    emit_triage(true)
 }
 
-fn health_report() -> Value {
-    let checks = vec![
+fn doctor_report(mode: &str) -> Value {
+    let findings = health_findings();
+    let healthy = !findings
+        .iter()
+        .any(|finding| finding.get("severity").and_then(Value::as_str) == Some("error"));
+    let mut report = json!({
+        "schema_version": DOCTOR_SCHEMA_VERSION,
+        "mode": mode,
+        "tool": "hashbytes",
+        "tool_version": env!("CARGO_PKG_VERSION"),
+        "healthy": healthy,
+        "findings": findings,
+    });
+
+    match mode {
+        "capabilities" => {
+            report["contract"] = operator_contract();
+        }
+        "triage" => {
+            let next_actions: &[&str] = if healthy {
+                &["hashbytes capabilities --json"]
+            } else {
+                &[
+                    "hashbytes doctor --json",
+                    "hashbytes doctor capabilities --json",
+                ]
+            };
+            report["next_actions"] = json!(next_actions);
+        }
+        "health" => {}
+        _ => unreachable!("doctor mode is fixed by the caller"),
+    }
+
+    report
+}
+
+fn health_findings() -> Vec<Value> {
+    [
         operator_manifest_check(),
         schema_contract_check(),
         algorithm_contract_check(),
         stream_contract_check(),
         witness_contract_check(),
-    ];
-    let ok = checks
-        .iter()
-        .all(|check| check.get("ok").and_then(Value::as_bool) == Some(true));
-
-    json!({
-        "$schema": HEALTH_SCHEMA,
-        "tool": "hashbytes",
-        "version": env!("CARGO_PKG_VERSION"),
-        "ok": ok,
-        "status": if ok { "healthy" } else { "unhealthy" },
-        "read_only_contract": READ_ONLY_CONTRACT,
-        "fix_mode": {
-            "available": false
-        },
-        "checks": checks
+    ]
+    .into_iter()
+    .map(|check| {
+        let name = check["name"].as_str().unwrap_or("unknown");
+        let ok = check["ok"].as_bool().unwrap_or(false);
+        json!({
+            "id": format!("hashbytes.{name}"),
+            "severity": if ok { "info" } else { "error" },
+            "message": if ok {
+                format!("{name} check passed")
+            } else {
+                format!("{name} check failed")
+            },
+            "fix": if ok { Value::Null } else {
+                json!("inspect hashbytes doctor capabilities --json")
+            }
+        })
     })
+    .map(|mut finding| {
+        if finding["fix"].is_null() {
+            finding
+                .as_object_mut()
+                .expect("finding object")
+                .remove("fix");
+        }
+        finding
+    })
+    .collect()
 }
 
-fn capabilities_report() -> Value {
-    json!({
-        "$schema": CAPABILITIES_SCHEMA,
-        "tool": "hashbytes",
-        "version": env!("CARGO_PKG_VERSION"),
-        "read_only_contract": READ_ONLY_CONTRACT,
-        "doctor": {
-            "read_only": true,
-            "fix_mode": {
-                "available": false,
-                "fixers": []
-            },
-            "commands": [
-                {
-                    "name": "health",
-                    "argv": ["hashbytes", "doctor", "health"],
-                    "json_argv": ["hashbytes", "doctor", "health", "--json"],
-                    "description": "Validate the compiled operator, schema, algorithm, stream, and witness contracts"
-                },
-                {
-                    "name": "capabilities",
-                    "argv": ["hashbytes", "doctor", "capabilities", "--json"],
-                    "description": "Return machine-readable doctor capabilities and side-effect promises"
-                },
-                {
-                    "name": "robot-docs",
-                    "argv": ["hashbytes", "doctor", "robot-docs"],
-                    "description": "Print concise agent-facing usage notes"
-                },
-                {
-                    "name": "robot-triage",
-                    "argv": ["hashbytes", "doctor", "--robot-triage"],
-                    "description": "Return one machine-readable health and triage report"
-                }
-            ]
-        },
-        "agent_surfaces": {
-            "global_json": {
-                "argv": ["hashbytes", "--json"],
-                "description": "Accepted as structured-output intent; normal hash output is already JSONL"
-            },
-            "robot_triage": {
-                "argv": ["hashbytes", "--robot-triage"],
-                "description": "Return one read-only machine-readable health, capability, and recommendation report"
-            },
-            "capabilities": {
-                "argv": ["hashbytes", "capabilities", "--json"],
-                "description": "Return machine-readable tool capabilities without reading stdin or appending witness records"
-            },
-            "robot_docs": {
-                "argv": ["hashbytes", "robot-docs", "guide"],
-                "description": "Print paste-ready agent guidance for safe hashbytes operation"
-            }
-        },
-        "hashbytes_capabilities": {
-            "streaming_jsonl": true,
-            "algorithms": ["sha256", "blake3"],
-            "operator_describe": true,
-            "schema_describe": true,
-            "witness_query": true,
-            "default_witness_append_for_hashing": true
-        },
-        "composition": {
-            "family": {
-                "name": "cmdrvl-spine",
-                "siblings": [
-                    {"tool": "vacuum", "capabilities": "vacuum capabilities --json"},
-                    {"tool": "hashbytes", "capabilities": "hashbytes capabilities --json"},
-                    {"tool": "fingerprint", "capabilities": "fingerprint capabilities --json"},
-                    {"tool": "lock", "capabilities": "lock capabilities --json"},
-                    {"tool": "pack", "capabilities": "pack capabilities --json"}
-                ]
-            },
-            "role": "middle of the evidence stream; add byte identity to vacuum records",
-            "position": 2,
-            "accepts": ["vacuum.v0 JSONL"],
-            "produces": ["hash.v0 JSONL"],
-            "canonical_chain": [
-                "vacuum --json <ROOT>... | hashbytes | fingerprint --fp <ID> | lock --dataset-id <DATASET> > dataset.lock.json",
-                "pack seal dataset.lock.json --output evidence/<DATASET>/"
-            ],
-            "agent_rules": [
-                "Pipe vacuum JSONL into hashbytes when downstream tools need bytes_hash.",
-                "Do not send raw human file listings to hashbytes; send versioned JSONL records.",
-                "Use --no-witness for deterministic read-side smoke tests."
-            ]
-        },
-        "side_effects": {
-            "reads_stdin": false,
-            "reads_input_manifest": false,
-            "reads_artifact_bytes": false,
-            "hashes_files": false,
-            "emits_hash_jsonl": false,
-            "opens_witness_ledger": false,
-            "appends_witness_ledger": false,
-            "creates_witness_directory": false,
-            "writes_doctor_artifacts": false,
-            "rewrites_operator_manifest": false,
-            "rewrites_schema": false,
-            "changes_cwd": false,
-            "uses_network": false
-        }
-    })
+fn operator_contract() -> Value {
+    serde_json::from_str(OPERATOR_MANIFEST).expect("operator.json must be valid JSON")
+}
+
+fn doctor_exit_code(report: &Value) -> u8 {
+    if report["healthy"].as_bool() == Some(true) {
+        0
+    } else {
+        1
+    }
 }
 
 fn operator_manifest_check() -> Value {
-    const OPERATOR_MANIFEST: &str = include_str!("../operator.json");
-    let parsed = serde_json::from_str::<Value>(OPERATOR_MANIFEST);
-
-    match parsed {
+    match serde_json::from_str::<Value>(OPERATOR_MANIFEST) {
         Ok(value) => {
+            let schema_ok =
+                value.get("schema_version").and_then(Value::as_str) == Some("operator.v1");
             let name_ok = value.get("name").and_then(Value::as_str) == Some("hashbytes");
-            let version_ok =
-                value.get("version").and_then(Value::as_str) == Some(env!("CARGO_PKG_VERSION"));
-            let output_mode_ok = value
-                .get("invocation")
-                .and_then(|invocation| invocation.get("output_mode"))
+            let version_ok = value
+                .get("tool_version")
+                .or_else(|| value.get("version"))
                 .and_then(Value::as_str)
-                == Some("stream");
-            let output_schema_ok = value
-                .get("invocation")
-                .and_then(|invocation| invocation.get("output_schema"))
-                .and_then(Value::as_str)
-                == Some("hash.v0");
+                == Some(env!("CARGO_PKG_VERSION"));
+            let contract_ok =
+                value.get("contract_version").and_then(Value::as_str) == Some(CONTRACT_VERSION);
+            let commands_ok = ["capabilities", "robot-docs", "doctor"]
+                .iter()
+                .all(|command| contains_command(&value, command));
             let pipeline_ok = contains_string(&value, &["pipeline", "upstream"], "vacuum")
                 && contains_string(&value, &["pipeline", "downstream"], "fingerprint")
                 && contains_string(&value, &["pipeline", "downstream"], "lock");
-            let ok = name_ok && version_ok && output_mode_ok && output_schema_ok && pipeline_ok;
+            let ok =
+                schema_ok && name_ok && version_ok && contract_ok && commands_ok && pipeline_ok;
 
             json!({
                 "name": "operator_manifest",
                 "ok": ok,
                 "details": {
+                    "schema_version": schema_ok,
                     "name": name_ok,
-                    "version": version_ok,
-                    "output_mode": output_mode_ok,
-                    "output_schema": output_schema_ok,
+                    "tool_version": version_ok,
+                    "contract_version": contract_ok,
+                    "commands": commands_ok,
                     "pipeline": pipeline_ok
                 }
             })
@@ -281,18 +207,14 @@ fn operator_manifest_check() -> Value {
         Err(err) => json!({
             "name": "operator_manifest",
             "ok": false,
-            "details": {
-                "error": err.to_string()
-            }
+            "details": { "error": err.to_string() }
         }),
     }
 }
 
 fn schema_contract_check() -> Value {
     const SCHEMA: &str = include_str!("../schema/hash.v0.schema.json");
-    let parsed = serde_json::from_str::<Value>(SCHEMA);
-
-    match parsed {
+    match serde_json::from_str::<Value>(SCHEMA) {
         Ok(value) => {
             let title_ok = value.get("title").and_then(Value::as_str) == Some("hash.v0");
             let required_ok = [
@@ -325,9 +247,7 @@ fn schema_contract_check() -> Value {
         Err(err) => json!({
             "name": "schema_contract",
             "ok": false,
-            "details": {
-                "error": err.to_string()
-            }
+            "details": { "error": err.to_string() }
         }),
     }
 }
@@ -365,7 +285,6 @@ fn stream_contract_check() -> Value {
 
 fn witness_contract_check() -> Value {
     let witness_path = witness::default_witness_path();
-
     json!({
         "name": "witness_contract",
         "ok": true,
@@ -379,6 +298,17 @@ fn witness_contract_check() -> Value {
     })
 }
 
+fn contains_command(value: &Value, expected: &str) -> bool {
+    value
+        .get("commands")
+        .and_then(Value::as_array)
+        .is_some_and(|commands| {
+            commands
+                .iter()
+                .any(|command| command.get("name").and_then(Value::as_str) == Some(expected))
+        })
+}
+
 fn contains_string(value: &Value, path: &[&str], expected: &str) -> bool {
     let mut current = value;
     for segment in path {
@@ -390,48 +320,39 @@ fn contains_string(value: &Value, path: &[&str], expected: &str) -> bool {
 
     current
         .as_array()
-        .map(|items| items.iter().any(|item| item.as_str() == Some(expected)))
-        .unwrap_or(false)
+        .is_some_and(|items| items.iter().any(|item| item.as_str() == Some(expected)))
+}
+
+fn print_operator_json() {
+    print!("{OPERATOR_MANIFEST}");
+    if !OPERATOR_MANIFEST.ends_with('\n') {
+        println!();
+    }
 }
 
 fn print_health_text(report: &Value) {
-    let ok = report.get("ok").and_then(Value::as_bool).unwrap_or(false);
+    let healthy = report["healthy"].as_bool().unwrap_or(false);
     println!(
         "hashbytes doctor: {}",
-        if ok { "healthy" } else { "unhealthy" }
+        if healthy { "healthy" } else { "unhealthy" }
     );
-    println!("read_only: true");
-    println!("fix_mode: unavailable");
-
-    if let Some(checks) = report.get("checks").and_then(Value::as_array) {
-        for check in checks {
-            let name = check
-                .get("name")
-                .and_then(Value::as_str)
-                .unwrap_or("unknown");
-            let status = if check.get("ok").and_then(Value::as_bool) == Some(true) {
-                "ok"
-            } else {
-                "failed"
-            };
-            println!("- {name}: {status}");
+    if let Some(findings) = report.get("findings").and_then(Value::as_array) {
+        for finding in findings {
+            println!(
+                "- {}: {}",
+                finding["id"].as_str().unwrap_or("unknown"),
+                finding["message"].as_str().unwrap_or("unknown")
+            );
         }
     }
 }
 
 fn print_capabilities_text() {
     println!("hashbytes capabilities");
-    println!("read_only: true");
-    println!("fix_mode: unavailable");
-    println!("commands:");
-    println!("- hashbytes --robot-triage");
-    println!("- hashbytes capabilities --json");
-    println!("- hashbytes robot-docs guide");
-    println!("- hashbytes --json");
-    println!("- hashbytes doctor health --json");
-    println!("- hashbytes doctor capabilities --json");
-    println!("- hashbytes doctor robot-docs");
-    println!("- hashbytes doctor --robot-triage");
+    println!("operator contract: hashbytes --describe");
+    println!("doctor: hashbytes doctor --json");
+    println!("triage: hashbytes doctor triage --json");
+    println!("robot docs: hashbytes robot-docs guide");
 }
 
 pub fn emit_robot_docs(_action: Option<&cli::RobotDocsAction>) -> u8 {
@@ -442,7 +363,7 @@ pub fn emit_robot_docs(_action: Option<&cli::RobotDocsAction>) -> u8 {
 pub fn emit_fix_unavailable() -> u8 {
     eprintln!("hashbytes doctor --fix is unavailable; doctor is read-only in this release.");
     eprintln!("Safe alternatives:");
-    eprintln!("- hashbytes --robot-triage");
+    eprintln!("- hashbytes doctor triage --json");
     eprintln!("- hashbytes doctor capabilities --json");
     eprintln!("- hashbytes capabilities --json");
     2
@@ -460,9 +381,10 @@ fn print_robot_docs() {
         "Composition: vacuum --json <ROOT>... | hashbytes | fingerprint --fp <ID> | lock --dataset-id <DATASET> > dataset.lock.json"
     );
     println!("Seal: pack seal dataset.lock.json --output evidence/<DATASET>/");
-    println!("Health: hashbytes doctor health --json");
+    println!("Health: hashbytes doctor --json");
     println!("Capabilities: hashbytes doctor capabilities --json");
-    println!("Triage: hashbytes doctor --robot-triage");
+    println!("Triage: hashbytes doctor triage --json");
+    println!("Legacy aliases: hashbytes doctor health --json and hashbytes doctor --robot-triage");
     println!("Fix mode: unavailable in this release.");
     println!(
         "Normal hashing still appends witness records unless --no-witness is used; doctor commands do not append witness records."
@@ -474,7 +396,21 @@ fn print_json(value: &Value) {
         Ok(rendered) => println!("{rendered}"),
         Err(err) => {
             eprintln!("hashbytes doctor: failed to render JSON: {err}");
-            println!("{{\"ok\":false}}");
+            println!(
+                "{{\"healthy\":false,\"findings\":[{{\"id\":\"hashbytes.render\",\"severity\":\"error\",\"message\":\"failed to render report\"}}]}}"
+            );
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::doctor_exit_code;
+    use serde_json::json;
+
+    #[test]
+    fn unhealthy_doctor_reports_are_negative_not_refusals() {
+        assert_eq!(doctor_exit_code(&json!({"healthy": false})), 1);
+        assert_ne!(doctor_exit_code(&json!({"healthy": false})), 2);
     }
 }

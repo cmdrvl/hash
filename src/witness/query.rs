@@ -154,11 +154,7 @@ pub fn handle_witness_query(action: &crate::cli::WitnessAction) -> Result<u8, St
                 }
             }
 
-            Ok(if filtered.is_empty() {
-                crate::cli::exit_code(crate::cli::Outcome::Partial)
-            } else {
-                crate::cli::exit_code(crate::cli::Outcome::AllHashed)
-            })
+            Ok(crate::cli::exit_code(crate::cli::Outcome::AllHashed))
         }
 
         WitnessAction::Last { json } => {
@@ -182,11 +178,7 @@ pub fn handle_witness_query(action: &crate::cli::WitnessAction) -> Result<u8, St
                 }
             }
 
-            Ok(if last_record.is_some() {
-                crate::cli::exit_code(crate::cli::Outcome::AllHashed)
-            } else {
-                crate::cli::exit_code(crate::cli::Outcome::Partial)
-            })
+            Ok(crate::cli::exit_code(crate::cli::Outcome::AllHashed))
         }
 
         WitnessAction::Count {
@@ -216,11 +208,7 @@ pub fn handle_witness_query(action: &crate::cli::WitnessAction) -> Result<u8, St
                 println!("{count}");
             }
 
-            Ok(if count > 0 {
-                crate::cli::exit_code(crate::cli::Outcome::AllHashed)
-            } else {
-                crate::cli::exit_code(crate::cli::Outcome::Partial)
-            })
+            Ok(crate::cli::exit_code(crate::cli::Outcome::AllHashed))
         }
     }
 }

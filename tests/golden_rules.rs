@@ -5,4 +5,6 @@ golden_rules_suite! {
     binary: env!("CARGO_BIN_EXE_hashbytes"),
     operator_json: include_str!("../operator.json"),
     source_files: &["src/refusal/codes.rs", "src/pipeline/enricher.rs"],
+    fixture_refusal_args: &["--algorithm", "md5", "--no-witness"],
+    fixture_empty_query_args: &["witness", "query", "--tool", "__empty__", "--json"],
 }

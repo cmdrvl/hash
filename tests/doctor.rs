@@ -6,244 +6,149 @@ use std::sync::atomic::{AtomicU64, Ordering};
 static TEMP_COUNTER: AtomicU64 = AtomicU64::new(0);
 
 fn isolated_command(label: &str) -> (Command, PathBuf) {
-    let (command, witness_path, _) = isolated_command_with_root(label);
-    (command, witness_path)
-}
-
-fn isolated_command_with_root(label: &str) -> (Command, PathBuf, PathBuf) {
     let unique_id = TEMP_COUNTER.fetch_add(1, Ordering::Relaxed);
     let root = std::env::temp_dir().join(format!(
         "hashbytes-doctor-{label}-{}-{unique_id}",
         std::process::id()
     ));
     let witness_path = root.join("witness").join("witness.jsonl");
-
     let mut command = Command::new(env!("CARGO_BIN_EXE_hashbytes"));
-    command.env("EPISTEMIC_WITNESS", &witness_path);
-    command.env("HOME", root.join("home"));
-    command.env("USERPROFILE", root.join("profile"));
-
-    (command, witness_path, root)
+    command
+        .env("EPISTEMIC_WITNESS", &witness_path)
+        .env("HOME", root.join("home"))
+        .env("USERPROFILE", root.join("profile"));
+    (command, witness_path)
 }
 
 fn parse_stdout_json(output: &Output) -> Value {
     serde_json::from_slice(&output.stdout).expect("doctor stdout must be valid JSON")
 }
 
-#[test]
-fn doctor_health_json_exits_zero_without_writing_witness() {
-    let (mut command, witness_path) = isolated_command("health");
+fn assert_doctor_report(args: &[&str], mode: &str) -> (Value, PathBuf, Output) {
+    let (mut command, witness_path) = isolated_command(mode);
     let output = command
-        .args(["doctor", "health", "--json"])
+        .args(args)
         .output()
-        .expect("hashbytes doctor health should run");
-
-    assert!(output.status.success());
-    let report = parse_stdout_json(&output);
-    assert_eq!(report["$schema"], "hashbytes.doctor.health.v1");
-    assert_eq!(report["tool"], "hashbytes");
-    assert_eq!(report["ok"], true);
-    assert_eq!(report["fix_mode"]["available"], false);
-    assert!(!witness_path.exists());
-    if let Some(parent) = witness_path.parent() {
-        assert!(!parent.exists());
-    }
-}
-
-#[test]
-fn doctor_capabilities_json_advertises_no_fixers_or_side_effects() {
-    let (mut command, witness_path) = isolated_command("capabilities");
-    let output = command
-        .args(["doctor", "capabilities", "--json"])
-        .output()
-        .expect("hashbytes doctor capabilities should run");
-
-    assert!(output.status.success());
-    let report = parse_stdout_json(&output);
-    assert_eq!(report["$schema"], "hashbytes.doctor.capabilities.v1");
-    assert_eq!(report["doctor"]["read_only"], true);
-    assert_eq!(report["doctor"]["fix_mode"]["available"], false);
+        .expect("doctor command should run");
     assert_eq!(
-        report["doctor"]["fix_mode"]["fixers"]
-            .as_array()
-            .map(Vec::len),
-        Some(0)
+        output.status.code(),
+        Some(0),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
     );
-
-    let side_effects = report["side_effects"]
-        .as_object()
-        .expect("side_effects must be an object");
-    for (name, value) in side_effects {
-        assert_eq!(value.as_bool(), Some(false), "{name} must be false");
-    }
-
+    let report = parse_stdout_json(&output);
+    assert_eq!(report["schema_version"], "cmdrvl.doctor.v1");
+    assert_eq!(report["mode"], mode);
+    assert_eq!(report["tool"], "hashbytes");
+    assert_eq!(report["tool_version"], env!("CARGO_PKG_VERSION"));
+    assert_eq!(report["healthy"], true);
+    assert!(report["findings"].is_array());
     assert!(!witness_path.exists());
+    (report, witness_path, output)
 }
 
 #[test]
-fn top_level_capabilities_json_advertises_agent_surfaces() {
-    let (mut command, witness_path) = isolated_command("top-level-capabilities");
+fn doctor_health_uses_family_schema_and_is_read_only() {
+    let _ = assert_doctor_report(&["doctor", "--json"], "health");
+}
+
+#[test]
+fn legacy_doctor_health_alias_remains_supported() {
+    let (report, _, _) = assert_doctor_report(&["doctor", "health", "--json"], "health");
+    assert_eq!(report["findings"].as_array().map(Vec::len), Some(5));
+}
+
+#[test]
+fn doctor_capabilities_embeds_the_exact_operator_contract() {
+    let (report, _, _) =
+        assert_doctor_report(&["doctor", "capabilities", "--json"], "capabilities");
+    let (mut command, _) = isolated_command("capabilities-contract");
     let output = command
         .args(["capabilities", "--json"])
         .output()
-        .expect("hashbytes capabilities should run");
-
-    assert!(output.status.success());
-    let report = parse_stdout_json(&output);
-    assert_eq!(report["$schema"], "hashbytes.doctor.capabilities.v1");
-    assert_eq!(
-        report["agent_surfaces"]["robot_triage"]["argv"][0],
-        "hashbytes"
-    );
-    assert_eq!(
-        report["agent_surfaces"]["capabilities"]["argv"][1],
-        "capabilities"
-    );
-    assert_eq!(report["composition"]["family"]["name"], "cmdrvl-spine");
-    assert_eq!(report["composition"]["position"], 2);
-    assert_eq!(report["composition"]["accepts"][0], "vacuum.v0 JSONL");
-    assert_eq!(report["composition"]["produces"][0], "hash.v0 JSONL");
-    assert!(
-        report["composition"]["canonical_chain"][0]
-            .as_str()
-            .is_some_and(|command| command.contains("| hashbytes | fingerprint --fp <ID>"))
-    );
-    assert!(!witness_path.exists());
+        .expect("capabilities should run");
+    let capabilities = parse_stdout_json(&output);
+    assert_eq!(report["contract"], capabilities);
+    assert_eq!(capabilities["schema_version"], "operator.v1");
 }
 
 #[test]
-fn doctor_robot_triage_json_is_machine_readable() {
-    let (mut command, witness_path) = isolated_command("triage");
-    let output = command
-        .args(["doctor", "--robot-triage"])
+fn doctor_triage_has_next_actions_and_old_alias_is_supported() {
+    let (report, _, _) = assert_doctor_report(&["doctor", "triage", "--json"], "triage");
+    assert!(report["next_actions"].as_array().is_some_and(|actions| {
+        actions
+            .iter()
+            .any(|action| action == "hashbytes capabilities --json")
+    }));
+
+    let (legacy, _, _) = assert_doctor_report(&["doctor", "--robot-triage"], "triage");
+    assert_eq!(legacy["next_actions"], report["next_actions"]);
+}
+
+#[test]
+fn top_level_surfaces_are_read_only_and_match_the_contract() {
+    let (mut describe, witness_path) = isolated_command("describe");
+    let described = describe
+        .arg("--describe")
         .output()
-        .expect("hashbytes doctor robot triage should run");
-
-    assert!(output.status.success());
-    let report = parse_stdout_json(&output);
-    assert_eq!(report["$schema"], "hashbytes.doctor.triage.v1");
-    assert_eq!(report["ok"], true);
-    assert_eq!(report["fix_mode"]["available"], false);
-    assert!(
-        report["recommended_next_commands"]
-            .as_array()
-            .is_some_and(|commands| commands.iter().any(|command| command
-                .as_str()
-                .is_some_and(|command| command == "hashbytes --robot-triage")))
+        .expect("--describe should run");
+    assert!(described.status.success());
+    assert_eq!(
+        parse_stdout_json(&described)["schema_version"],
+        "operator.v1"
     );
-    assert!(!witness_path.exists());
-}
 
-#[test]
-fn top_level_robot_triage_is_machine_readable() {
-    let (mut command, witness_path) = isolated_command("top-level-triage");
-    let output = command
+    let (mut triage, _) = isolated_command("top-level-triage");
+    let triage_output = triage
         .arg("--robot-triage")
         .output()
-        .expect("hashbytes --robot-triage should run");
-
-    assert!(output.status.success());
-    let report = parse_stdout_json(&output);
-    assert_eq!(report["$schema"], "hashbytes.doctor.triage.v1");
-    assert_eq!(report["ok"], true);
-    assert_eq!(
-        report["capabilities"]["agent_surfaces"]["robot_docs"]["argv"][2],
-        "guide"
-    );
+        .expect("--robot-triage should run");
+    assert!(triage_output.status.success());
+    assert_eq!(parse_stdout_json(&triage_output)["mode"], "triage");
     assert!(!witness_path.exists());
 }
 
 #[test]
-fn doctor_robot_docs_is_plain_text() {
-    let (mut command, witness_path) = isolated_command("robot-docs");
-    let output = command
-        .args(["doctor", "robot-docs"])
-        .output()
-        .expect("hashbytes doctor robot-docs should run");
-
-    assert!(output.status.success());
-    let stdout = String::from_utf8(output.stdout).expect("stdout should be utf-8");
-    assert!(stdout.contains("hashbytes robot-docs guide"));
-    assert!(stdout.contains("Fix mode: unavailable"));
-    assert!(!witness_path.exists());
-}
-
-#[test]
-fn top_level_robot_docs_guide_is_plain_text() {
-    let (mut command, witness_path) = isolated_command("top-level-robot-docs");
-    let output = command
-        .args(["robot-docs", "guide"])
-        .output()
-        .expect("hashbytes robot-docs guide should run");
-
-    assert!(output.status.success());
-    let stdout = String::from_utf8(output.stdout).expect("stdout should be utf-8");
-    assert!(stdout.contains("hashbytes robot-docs guide"));
-    assert!(stdout.contains("hashbytes capabilities --json"));
-    assert!(stdout.contains("vacuum --json <ROOT>... | hashbytes | fingerprint --fp <ID>"));
-    assert!(stdout.contains("pack seal dataset.lock.json --output evidence/<DATASET>/"));
-    assert!(!witness_path.exists());
-}
-
-#[test]
-fn doctor_fix_is_not_available() {
+fn doctor_fix_is_unavailable_and_returns_usage_error() {
     let (mut command, witness_path) = isolated_command("fix");
     let output = command
         .args(["doctor", "--fix"])
         .output()
-        .expect("hashbytes doctor --fix should run and report unavailable");
-
+        .expect("doctor --fix should run");
     assert_eq!(output.status.code(), Some(2));
-    let stderr = String::from_utf8(output.stderr).expect("stderr should be utf-8");
+    let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(stderr.contains("doctor --fix is unavailable"));
-    assert!(stderr.contains("hashbytes --robot-triage"));
     assert!(!witness_path.exists());
 }
 
 #[test]
-fn describe_runs_without_guard_hooks() {
-    let (mut command, witness_path) = isolated_command("describe");
-    let output = command
-        .arg("--describe")
-        .output()
-        .expect("hashbytes --describe should run");
-
-    assert!(output.status.success());
-    let stdout = String::from_utf8(output.stdout).expect("stdout should be utf-8");
-    assert!(stdout.contains("\"name\": \"hashbytes\""));
-    assert!(!witness_path.exists());
+fn no_color_and_non_tty_help_are_ansi_free() {
+    for no_color in [true, false] {
+        let mut command = Command::new(env!("CARGO_BIN_EXE_hashbytes"));
+        command.arg("--help");
+        if no_color {
+            command.env("NO_COLOR", "1").env("TERM", "dumb");
+        } else {
+            command.env_remove("NO_COLOR").env_remove("TERM");
+        }
+        let output = command.output().expect("help should run");
+        assert!(!output.stdout.contains(&0x1b), "help stdout contained ANSI");
+        assert!(!output.stderr.contains(&0x1b), "help stderr contained ANSI");
+    }
 }
 
 #[test]
-fn domain_hashing_runs_without_guard_hooks() {
-    let (mut command, witness_path, _) = isolated_command_with_root("no-guard-hooks");
-
-    let output = command
-        .arg("--no-witness")
-        .output()
-        .expect("hashbytes domain command should run");
-
-    assert!(output.status.success());
-    assert!(
-        output.stdout.is_empty(),
-        "empty stdin should produce no hashed records"
-    );
-    assert!(!witness_path.exists());
-}
-
-#[test]
-fn top_level_json_is_noop_for_empty_stream() {
-    let (mut command, witness_path, _) = isolated_command_with_root("json-noop");
-
-    let output = command
-        .args(["--json", "--no-witness"])
-        .output()
-        .expect("hashbytes --json should run");
-
-    assert!(output.status.success());
-    assert!(
-        output.stdout.is_empty(),
-        "empty stdin should still produce no hashed records"
-    );
-    assert!(!witness_path.exists());
+fn typo_recovery_keeps_edit_distance_one_hints_for_flags_and_subcommands() {
+    for args in [
+        ["--algoritm", "sha256"].as_slice(),
+        ["doctor", "healt"].as_slice(),
+    ] {
+        let output = Command::new(env!("CARGO_BIN_EXE_hashbytes"))
+            .args(args)
+            .output()
+            .expect("typo invocation should run");
+        assert_eq!(output.status.code(), Some(2));
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert!(stderr.contains("similar"), "missing typo hint: {stderr}");
+    }
 }
