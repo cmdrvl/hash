@@ -109,6 +109,32 @@ fn top_level_surfaces_are_read_only_and_match_the_contract() {
 }
 
 #[test]
+fn robot_docs_preserve_agent_operating_content() {
+    let (mut command, witness_path) = isolated_command("robot-docs");
+    let output = command
+        .args(["robot-docs", "guide"])
+        .output()
+        .expect("robot-docs should run");
+
+    assert_eq!(output.status.code(), Some(0));
+    assert!(output.stderr.is_empty());
+    assert!(!witness_path.exists());
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    for expected in [
+        "hashbytes --robot-triage",
+        "hashbytes capabilities --json",
+        "hashbytes robot-docs guide",
+        "hashbytes doctor triage --json",
+        "Composition:",
+        "vacuum --json <ROOT>... | hashbytes | fingerprint --fp <ID>",
+        "pack seal dataset.lock.json --output evidence/<DATASET>/",
+        "doctor commands do not append witness records",
+    ] {
+        assert!(stdout.contains(expected), "robot-docs omitted {expected:?}");
+    }
+}
+
+#[test]
 fn doctor_fix_is_unavailable_and_returns_usage_error() {
     let (mut command, witness_path) = isolated_command("fix");
     let output = command
@@ -138,10 +164,32 @@ fn no_color_and_non_tty_help_are_ansi_free() {
 }
 
 #[test]
+fn unhealthy_doctor_state_exits_one() {
+    let (mut command, witness_path) = isolated_command("unhealthy");
+    std::fs::create_dir_all(&witness_path).unwrap();
+    let output = command
+        .args(["doctor", "--json"])
+        .output()
+        .expect("unhealthy doctor should run");
+
+    assert_eq!(output.status.code(), Some(1));
+    assert!(output.stderr.is_empty());
+    let report = parse_stdout_json(&output);
+    assert_eq!(report["schema_version"], "cmdrvl.doctor.v1");
+    assert_eq!(report["healthy"], false);
+    assert!(report["findings"].as_array().is_some_and(|findings| {
+        findings.iter().any(|finding| {
+            finding["id"] == "hashbytes.witness_contract" && finding["severity"] == "error"
+        })
+    }));
+}
+
+#[test]
 fn typo_recovery_keeps_edit_distance_one_hints_for_flags_and_subcommands() {
     for args in [
         ["--algoritm", "sha256"].as_slice(),
         ["doctor", "healt"].as_slice(),
+        ["witnes", "count"].as_slice(),
     ] {
         let output = Command::new(env!("CARGO_BIN_EXE_hashbytes"))
             .args(args)
@@ -150,5 +198,11 @@ fn typo_recovery_keeps_edit_distance_one_hints_for_flags_and_subcommands() {
         assert_eq!(output.status.code(), Some(2));
         let stderr = String::from_utf8_lossy(&output.stderr);
         assert!(stderr.contains("similar"), "missing typo hint: {stderr}");
+        if args == ["witnes", "count"] {
+            assert!(
+                stderr.contains("similar command: witness"),
+                "missing witness recovery: {stderr}"
+            );
+        }
     }
 }

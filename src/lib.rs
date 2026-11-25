@@ -58,7 +58,125 @@ struct StreamState<'a> {
 
 /// Main entry point that handles all errors internally and returns exit code
 pub fn run() -> u8 {
-    run_with_cli(cli::Cli::parse())
+    let args: Vec<_> = std::env::args_os().collect();
+    match cli::Cli::try_parse_from(&args) {
+        Ok(parsed) => run_with_cli(parsed),
+        Err(error) => {
+            let exit_code = error.exit_code() as u8;
+            if matches!(
+                error.kind(),
+                clap::error::ErrorKind::DisplayHelp | clap::error::ErrorKind::DisplayVersion
+            ) {
+                print!("{error}");
+            } else {
+                eprint!("{error}");
+                if let Some(hint) = typo_hint(&args) {
+                    eprintln!("\nhint: {hint}");
+                }
+            }
+            exit_code
+        }
+    }
+}
+
+fn typo_hint(args: &[std::ffi::OsString]) -> Option<String> {
+    let tokens: Vec<&str> = args.iter().skip(1).filter_map(|arg| arg.to_str()).collect();
+    let top_level = ["capabilities", "robot-docs", "witness", "doctor"];
+    let witness_actions = ["query", "last", "count"];
+    let doctor_actions = ["health", "capabilities", "triage", "robot-docs"];
+    let robot_docs_actions = ["guide"];
+    let flags = [
+        "--help",
+        "--version",
+        "--json",
+        "--robot-triage",
+        "--algorithm",
+        "--jobs",
+        "--no-witness",
+        "--progress",
+        "--describe",
+        "--schema",
+        "--tool",
+        "--since",
+        "--until",
+        "--outcome",
+        "--input-hash",
+        "--limit",
+    ];
+
+    for (index, token) in tokens.iter().enumerate() {
+        let candidates: &[&str] = if token.starts_with('-') {
+            &flags
+        } else if index == 0 {
+            &top_level
+        } else if tokens.first() == Some(&"witness") {
+            &witness_actions
+        } else if tokens.first() == Some(&"doctor") {
+            &doctor_actions
+        } else if tokens.first() == Some(&"robot-docs") {
+            &robot_docs_actions
+        } else {
+            continue;
+        };
+
+        let Some(candidate) = candidates
+            .iter()
+            .copied()
+            .find(|candidate| edit_distance_at_most_one(token, candidate))
+        else {
+            continue;
+        };
+
+        let kind = if candidate.starts_with('-') {
+            "flag"
+        } else {
+            "command"
+        };
+        return Some(format!("similar {kind}: {candidate}"));
+    }
+
+    None
+}
+
+fn edit_distance_at_most_one(left: &str, right: &str) -> bool {
+    let left = left.as_bytes();
+    let right = right.as_bytes();
+    if left == right {
+        return false;
+    }
+    if left.len().abs_diff(right.len()) > 1 {
+        return false;
+    }
+
+    if left.len() == right.len() {
+        return left
+            .iter()
+            .zip(right)
+            .filter(|(left, right)| left != right)
+            .count()
+            == 1;
+    }
+
+    let (shorter, longer) = if left.len() < right.len() {
+        (left, right)
+    } else {
+        (right, left)
+    };
+    let mut short_index = 0;
+    let mut long_index = 0;
+    let mut skipped = false;
+    while short_index < shorter.len() {
+        if shorter[short_index] == longer[long_index] {
+            short_index += 1;
+            long_index += 1;
+        } else if skipped {
+            return false;
+        } else {
+            skipped = true;
+            long_index += 1;
+        }
+    }
+    true
 }
 
 pub fn run_with_cli(cli: cli::Cli) -> u8 {

@@ -285,15 +285,17 @@ fn stream_contract_check() -> Value {
 
 fn witness_contract_check() -> Value {
     let witness_path = witness::default_witness_path();
+    let path_is_usable = !witness_path.is_dir();
     json!({
         "name": "witness_contract",
-        "ok": true,
+        "ok": path_is_usable,
         "details": {
             "resolved_path": witness_path.to_string_lossy(),
             "resolved_only": true,
             "opens_ledger": false,
             "appends_ledger": false,
-            "creates_directory": false
+            "creates_directory": false,
+            "path_is_usable": path_is_usable
         }
     })
 }
