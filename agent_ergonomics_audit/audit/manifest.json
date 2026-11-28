@@ -1,8 +1,8 @@
 {
   "schema_version": "1.1.0",
   "tool_name": "hash",
-  "tool_repo": "/Users/zac/Source/cmdrvl/hash",
-  "audit_workspace": "/Users/zac/Source/cmdrvl/hash/agent_ergonomics_audit",
+  "tool_repo": "[workspace]/hash",
+  "audit_workspace": "[workspace]/hash/agent_ergonomics_audit",
   "rubric_version": "<git SHA of references/rubric/SCORING-RUBRIC.md when scoring ran>",
   "passes": [
     {

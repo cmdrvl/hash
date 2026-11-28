@@ -1,6 +1,6 @@
 # Agent Ergonomics Scorecard - hashbytes pass 1
 
-Target: `/Users/zac/Source/cmdrvl/hash`
+Target: `[workspace]/hash`
 Binary: `hashbytes`
 Mode: full
 

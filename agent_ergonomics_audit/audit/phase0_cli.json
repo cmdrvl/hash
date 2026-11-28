@@ -1,5 +1,5 @@
 {
-  "target_path": "/Users/zac/Source/cmdrvl/hash",
+  "target_path": "[workspace]/hash",
   "discovered_at": "2026-06-10T03:43:53Z",
   "languages": [
     "rust"
